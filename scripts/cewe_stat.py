@@ -1,33 +1,60 @@
 #!/usr/bin/env python
 
+__readme = \
+"""
+Part of the CEWE library. See cewe.py for the general details.
 
-#dct contains:
+For calculations CEWE dictionaries are used.
 
-#variables
-#plotname
-#units
-#scalefactor
-#angular
-#n
-#mean
-#variance
-#distribution_norm_ppt
-#distribution_val
-#distribution_cdf
+A CEWE dictionary contains:
+"angular"							: "list (nvar) with True/False for each variable indicating whether angular variable of not",
+"histogram_bounds"                  : "array (nvar x (nbins +1)) with histogram bounds",
+"histogram_central_value"           : "array (nvar x nbins) with histogram central values",
+"histogram_count"                   : "array (nvar x nbins) with histogram counts",
+"mean"                              : "list (nvar) with means of samples for each variable",
+"nbins"                             : "number of bins, that are used for the histograms",
+"nsamples"                          : "list (nvar) with number of samples for each variable",
+"nvars"                             : "number of variables",
+"plotname"                          : "list (nvar) with plot name for each variable",
+"scalefactor"                       : "list (nvar) with scale factor for each variable (used for plotting)",
+"scatter"                           : "a dictionary with all information of comparison of two variables A and B",
+"units"                             : "list (nvar) with units for each variable",
+"variables"                         : "list (nvar) with short name for each variable",
+"variance"                          : "list (nvar) with variances of samples for each variable",
 
-#dct['scatter'] contains:
-#n
-#meanA
-#meanB
-#varianceA
-#varianceB
-#covarianceAB
-#correlationcoefficientAB
-#leastsquaresfit_A
-#leastsquaresfit_B
-#histogram2D_bounds
-#histogram2D_central_value
-#histogram2D_values
+A CEWE scatter dictionary contains:
+"covarianceAB"                      : "array (nvar x nvar) with covariance of variable A and B",
+"correlationcoefficientAB"          : "array (nvar x nvar) with correlation coefficient of variable A and B",
+"histogram2D_count"                 : "array (nvar x nvar x nbins x nbins) with 2D histogram counts",
+"leastsquaresfit_C"                 : "array (nvar x nvar) with least squares fit parameter C",
+"leastsquaresfit_D"                 : "array (nvar x nvar) with least squares fit parameter D",
+"meanA"                             : "array (nvar x nvar) with mean of variable A",
+"meanB"                             : "array (nvar x nvar) with mean of variable B",
+"nsamples"                          : "array (nvar x nvar) with number of samples",
+"varianceA"                         : "array (nvar x nvar) with variance of variable A",
+"varianceB"                         : "array (nvar x nvar) with variance of variable B",
+
+To create a CEWE ditrionary, a dataset dictionary is used as input.
+
+A dataset ditrionary contains
+- A                                 : Variables that are a dictionary
+- B                                 : ...
+- C                                 : ...
+
+A variable dictionary contains (e.g. 'A')
+- angular                           : True/False indicating whether angular variable or not
+- llim                              : lower limit for creation of bins
+- plotname                          : name used for plotting
+- samples                           : samples of the data
+- scalefactor                       : scale factor used for plotting
+- ulim                              : uper limit for creation of bins
+- units                             : units used for plotting
+
+Most important Functions:
+create_cewe_dct                     : create CEWE dictionary given a dataset dictionary
+combine_cewe_dct                    : function that combines two CEWE dictionaries
+alternative_covariance_calculation  : alternative that calculate covariance from 2D histogram
+"""
 
 
 import warnings; warnings.simplefilter("ignore")
@@ -35,12 +62,319 @@ import numpy as np
 from scipy import stats
 from copy import deepcopy
 from scipy.interpolate import interp1d
-#~ from scipy.interpolate import UnivariateSpline
+
+#default options for the creation of a CEWE dictionary. Can be modified by the user.
+cewe_default_opts = {'nbins':50, '_FillValue': [-999.9]}    
+
+def create_cewe_dct(dataset, input_cewe_opts={}):
+    #TBD: check dataset dictionary
+    
+    cewe_opts = deepcopy(cewe_default_opts)
+    cewe_opts.update(input_cewe_opts)
+    
+    #Fill Values
+    _FillValues     = cewe_opts['_FillValue']
+    _FillValue      = cewe_opts['_FillValue'][0]
+
+    #take over list of variables
+    cewe_dct = {}
+    cewe_dct['variables']       = sorted(dataset.keys())
+
+    cewe_dct['nvars']           = len(cewe_dct['variables'])
+    cewe_dct['nbins']           = cewe_opts['nbins']
+
+    #list
+    cewe_dct['plotname']        = deepcopy(cewe_dct['variables'])
+    cewe_dct['scalefactor']     = deepcopy(cewe_dct['variables'])
+    cewe_dct['units']           = deepcopy(cewe_dct['variables'])
+    
+    #numpy lists of integers
+    cewe_dct['angular']         = np.zeros(cewe_dct['nvars'], dtype=np.int) + _FillValue
+    cewe_dct['nsamples']        = np.zeros(cewe_dct['nvars'], dtype=np.int) + _FillValue
+    
+    #numpy list of floats
+    cewe_dct['histogram_bounds']        = np.zeros((cewe_dct['nvars'], cewe_dct['nbins'] + 1)) + _FillValue
+    cewe_dct['histogram_central_value'] = np.zeros((cewe_dct['nvars'], cewe_dct['nbins'])) + _FillValue
+    cewe_dct['histogram_count']         = np.zeros((cewe_dct['nvars'], cewe_dct['nbins'])) + _FillValue
+    cewe_dct['mean']                    = np.zeros(cewe_dct['nvars']) + _FillValue
+    cewe_dct['variance']                = np.zeros(cewe_dct['nvars']) + _FillValue
+
+    for i in range(cewe_dct['nvars']):
+        myvar                                   = cewe_dct['variables'][i]
+        cewe_dct['angular'][i]                  = 0 if (dataset[myvar]['angular']) else 1
+        cewe_dct['histogram_bounds'][i]         = np.linspace(dataset[myvar]['llim'], dataset[myvar]['ulim'], cewe_dct['nbins'] + 1)  
+        cewe_dct['histogram_central_value'][i]  = (cewe_dct['histogram_bounds'][i][1:] + cewe_dct['histogram_bounds'][i][:-1]) / 2.
+        cewe_dct['plotname'][i]                 = dataset[myvar]['plotname']
+        cewe_dct['scalefactor'][i]              = 1. if (dataset[myvar]['scalefactor'] <= 0) else (1. * dataset[myvar]['scalefactor'])
+        cewe_dct['units'][i]                    = dataset[myvar]['units']
+
+    for mynr in range(cewe_dct['nvars']): 
+        myvar   = cewe_dct['variables'][mynr]
+        myok    = ok(dataset[myvar]['samples'], cewe_opts)
+        myang   = cewe_dct['angular'][mynr]
+        
+        cewe_dct['nsamples'][mynr]  = np.sum(myok)
+        cewe_dct['angular'][mynr]   = myang
+
+        if cewe_dct['nsamples'][mynr] > 10:
+            mysamples = np.compress(myok, dataset[myvar]['samples'])                             
+        
+            #calculate mean, std, histogram
+            cewe_dct['mean'][mynr]              = mean(mysamples, ang=myang)
+            cewe_dct['variance'][mynr]          = variance(mysamples, ang=myang)
+            myhistogram, dummy                  = np.histogram(mysamples, bins=cewe_dct['histogram_bounds'][i])
+            cewe_dct['histogram_count'][mynr]   = deepcopy(myhistogram)
+            del mysamples
+            
+    #Calculate scatter statistics.
+    cewe_scatter_dct = {}
+    
+    sh1 = (cewe_dct['nvars'], cewe_dct['nvars'])
+    sh2 = (cewe_dct['nvars'], cewe_dct['nvars'], cewe_dct['nbins'], cewe_dct['nbins'])
+
+    cewe_scatter_dct['nsamples']            = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['meanA']               = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['meanB']               = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['varianceA']           = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['varianceB']           = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['covarianceAB']        = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['histogram2D_count']   = np.zeros(sh2) + _FillValue
+
+    for mynrA in range(cewe_dct['nvars']):                
+        myvarA = cewe_dct['variables'][mynrA]
+        for mynrB in range(cewe_dct['nvars']):                
+            myvarB = cewe_dct['variables'][mynrB]
+        
+            myokAB =  ok(dataset[myvarA]['samples'], cewe_opts) & ok(dataset[myvarB]['samples'], cewe_opts)
+            myangA  = cewe_dct['angular'][mynrA]
+            myangB  = cewe_dct['angular'][mynrB]
+            
+            cewe_scatter_dct['nsamples'][mynrA, mynrB] = np.sum(myokAB)
+
+            if cewe_scatter_dct['nsamples'][mynrA, mynrB] > 10:             
+                mydataA = np.compress(myokAB, dataset[myvarA]['samples'])                              
+                mydataB = np.compress(myokAB, dataset[myvarB]['samples'])                              
+                
+                cewe_scatter_dct['meanA'][mynrA, mynrB]          = mean(mydataA, ang=myangA)
+                cewe_scatter_dct['meanB'][mynrA, mynrB]          = mean(mydataB, ang=myangB)
+                cewe_scatter_dct['varianceA'][mynrA, mynrB]      = variance(mydataA, ang=myangA)
+                cewe_scatter_dct['varianceB'][mynrA, mynrB]      = variance(mydataB, ang=myangB)
+                cewe_scatter_dct['covarianceAB'][mynrA, mynrB]   = covariance(mydataA, mydataB, myangA, myangB)
+
+                #2D histogram.
+                A_llim, A_ulim = dataset[myvarA]['llim'], dataset[myvarA]['ulim']
+                B_llim, B_ulim = dataset[myvarB]['llim'], dataset[myvarB]['ulim']
+
+                bins = [ np.linspace(A_llim, A_ulim, cewe_dct['nbins'] + 1), np.linspace(B_llim, B_ulim, cewe_dct['nbins'] + 1) ]
+
+                dummy1, dummy2, dummy3 = np.histogram2d(mydataA, mydataB , bins, normed=False )
+                cewe_scatter_dct['histogram2D_count'][mynrA, mynrB] = np.transpose(dummy1) 
+
+    #post calculations
+    cewe_scatter_dct['leastsquaresfit_D'] = cewe_scatter_dct['covarianceAB'] / cewe_scatter_dct['varianceA']
+    cewe_scatter_dct['leastsquaresfit_C'] = cewe_scatter_dct['meanB'] - (cewe_scatter_dct['leastsquaresfit_D'] * cewe_scatter_dct['meanA'])
+    cewe_scatter_dct['correlationcoefficientAB'] = cewe_scatter_dct['covarianceAB'] / np.sqrt(cewe_scatter_dct['varianceA'] * cewe_scatter_dct['varianceB'])
+    cewe_dct['scatter'] = cewe_scatter_dct
+       
+    return cewe_dct             
+
+  
+def add_cewe_dct(cewe_dct, cewe_dct_to_add, cewe_opts={}):
+    #TBD: check given CEWE dictionaries 
+
+    if len(cewe_dct.keys()) == 0:
+        #empty cewe_dct -> copy
+        cewe_dct.update(deepcopy(cewe_dct_to_add))
+    elif len(cewe_dct_to_add.keys()) == 0:
+        #empty cewe_dct_to_add -> nothing 
+        pass
+    else:
+        for mynr in range(cewe_dct['nvars']):
+            n1  = cewe_dct['nsamples'][mynr]
+            n2  = cewe_dct_to_add['nsamples'][mynr]
+            
+            if n2 <= 10:
+                continue
+            
+            #no results for this variable yet -> copy
+            if n1 <= 10:
+                cewe_dct['nsamples'][mynr]             = cewe_dct_to_add['nsamples'][mynr]
+                cewe_dct['mean'][mynr]                 = cewe_dct_to_add['mean'][mynr]
+                cewe_dct['variance'][mynr]             = cewe_dct_to_add['variance'][mynr] 
+                cewe_dct['histogram_count'][mynr]      = cewe_dct_to_add['histogram_count'][mynr] 
+                continue
+              
+            #standard
+            angular         = cewe_dct['angular'][mynr]
+       
+            n       = n1 + n2
+            mu1     = cewe_dct['mean'][mynr]
+            mu2     = cewe_dct_to_add['mean'][mynr]
+            mu      = mean((mu1, mu2), (1. * n1/n, 1. * n2/n), angular)
+            var1    = cewe_dct['variance'][mynr]
+            var2    = cewe_dct_to_add['variance'][mynr]        
+            var     = (
+                        ((1. * n1) / n) * var1 +
+                        ((1. * n1) / n) * (diff(mu1, mu, angular) ** 2.) +
+                        ((1. * n2) / n) * var2 +
+                        ((1. * n2) / n) * (diff(mu2, mu, angular) ** 2.) 
+                        )
+
+            cewe_dct['nsamples'][mynr]              = n            
+            cewe_dct['mean'][mynr]                  = mu
+            cewe_dct['variance'][mynr]              = var
+            cewe_dct['histogram_count'][mynr]       = (
+                cewe_dct['histogram_count'][mynr] +
+                cewe_dct_to_add['histogram_count'][mynr]
+                )
+
+        #scatter statistics
+        cewe_scatter_dct         = cewe_dct['scatter']
+        cewe_scatter_dct_to_add  = cewe_dct_to_add['scatter']
+
+        for mynrA in range(cewe_dct['nvars']):                
+            for mynrB in range(cewe_dct['nvars']):             
+                n1  = cewe_scatter_dct['nsamples'][mynrA, mynrB]
+                n2  = cewe_scatter_dct_to_add['nsamples'][mynrA, mynrB]
+                
+                myangA = int(cewe_dct['angular'][mynrA])
+                myangB = int(cewe_dct['angular'][mynrB])
+                
+                if n2 <= 10:
+                    #nothing to add
+                    continue
+                    
+                #no results for this variable yet
+                if n1 <= 10:
+                    cewe_scatter_dct['nsamples'][mynrA, mynrB]          = cewe_scatter_dct_to_add['nsamples'][mynrA, mynrB]
+                    cewe_scatter_dct['meanA'][mynrA, mynrB]             = cewe_scatter_dct_to_add['meanA'][mynrA, mynrB]
+                    cewe_scatter_dct['meanB'][mynrA, mynrB]             = cewe_scatter_dct_to_add['meanB'][mynrA, mynrB]
+                    cewe_scatter_dct['varianceA'][mynrA, mynrB]         = cewe_scatter_dct_to_add['varianceA'][mynrA, mynrB]
+                    cewe_scatter_dct['varianceB'][mynrA, mynrB]         = cewe_scatter_dct_to_add['varianceB'][mynrA, mynrB]
+                    cewe_scatter_dct['covarianceAB'][mynrA, mynrB]      = cewe_scatter_dct_to_add['covarianceAB'][mynrA, mynrB]
+                    cewe_scatter_dct['histogram2D_count'][mynrA, mynrB] = cewe_scatter_dct_to_add['histogram2D_count'][mynrA, mynrB]
+                    continue
+                    
+                n               = n1 + n2
+                muA1            = cewe_scatter_dct['meanA'][mynrA, mynrB]
+                muA2            = cewe_scatter_dct_to_add['meanA'][mynrA, mynrB]
+                muB1            = cewe_scatter_dct['meanB'][mynrA, mynrB]
+                muB2            = cewe_scatter_dct_to_add['meanB'][mynrA, mynrB]
+                muA             = mean((muA1, muA2), (1. * n1 / n, 1. * n2 / n), myangA)
+                muB             = mean((muB1, muB2), (1. * n1 / n, 1. * n2 / n), myangB)
+                
+                varA1           = cewe_scatter_dct['varianceA'][mynrA, mynrB]
+                varA2           = cewe_scatter_dct_to_add['varianceA'][mynrA, mynrB]
+                varA            = (1. / n) * ( n1 * varA1 + n1 * (diff(muA1,muA, myangA) ** 2.)
+                                        + n2 * varA2 + n2 * (diff(muA2, muA, myangA) ** 2.)  )
+
+                varB1           = cewe_scatter_dct['varianceB'][mynrA, mynrB]
+                varB2           = cewe_scatter_dct_to_add['varianceB'][mynrA, mynrB]
+                varB            = (1. / n) * ( n1 * varB1 + n1 * (diff(muB1, muB, myangB) ** 2.)
+                                        + n2 * varB2 + n2 * (diff(muB2, muB, myangB) ** 2.)  )
+                
+                #covariance
+                covAB1          = cewe_scatter_dct['covarianceAB'][mynrA, mynrB]
+                covAB2          = cewe_scatter_dct_to_add['covarianceAB'][mynrA, mynrB]
+                covAB =   ( \
+                                        ((1. * n1 / n) * covAB1) + ((1. * n1 / n) * diff(muA1, muA, myangA) * diff(muB1, muB, myangB)) + \
+                                        ((1. * n2 / n) * covAB2) + ((1. * n2 / n) * diff(muA2, muA, myangA) * diff(muB2, muB, myangB)) \
+                          )
+                    
+                cewe_scatter_dct['nsamples'][mynrA, mynrB]          = n
+                cewe_scatter_dct['meanA'][mynrA, mynrB]             = muA
+                cewe_scatter_dct['meanB'][mynrA, mynrB]             = muB
+                cewe_scatter_dct['varianceA'][mynrA, mynrB]         = varA
+                cewe_scatter_dct['varianceB'][mynrA, mynrB]         = varB
+                cewe_scatter_dct['covarianceAB'][mynrA, mynrB]      = covAB
+
+                cewe_scatter_dct['histogram2D_count'][mynrA, mynrB]  = (
+                    cewe_scatter_dct['histogram2D_count'][mynrA, mynrB] +
+                    cewe_scatter_dct_to_add['histogram2D_count'][mynrA, mynrB]
+                    )
+
+        #post calculations
+        cewe_scatter_dct['leastsquaresfit_D'] = cewe_scatter_dct['covarianceAB'] / cewe_scatter_dct['varianceA']
+        cewe_scatter_dct['leastsquaresfit_C'] = cewe_scatter_dct['meanB'] - (cewe_scatter_dct['leastsquaresfit_D'] * cewe_scatter_dct['meanA'])
+        cewe_scatter_dct['correlationcoefficientAB'] = cewe_scatter_dct['covarianceAB'] / np.sqrt(cewe_scatter_dct['varianceA'] * cewe_scatter_dct['varianceB'])
+        cewe_dct['scatter'] = cewe_scatter_dct
+           
 
 
+def alternative_covariance_calculation(cewe_dct, cewe_opts={}):
+    #TBD: check given CEWE dictionaries 
+        
+    cewe_scatter_dct = cewe_dct['scatter']
+
+    for mynrA in range(cewe_dct['nvars']):                
+        for mynrB in range(cewe_dct['nvars']):
+            muA         = cewe_scatter_dct['meanA'][mynrA, mynrB]
+            muB         = cewe_scatter_dct['meanB'][mynrA, mynrB]
+            n           = cewe_scatter_dct['nsamples'][mynrA, mynrB]
+
+            myangA = int(dct['angular'][mynrA])
+            myangB = int(dct['angular'][mynrB])  
+
+            cvalueA = cewe_dct['histogram_central_value'][mynrA]
+            cvalueB = cewe_dct['histogram_central_value'][mynrB]
+
+            #walk through the grid
+            varA = 0.
+            varB = 0.
+            covAB = 0.
+            for iA in range(cewe_dct['bins']):
+                for iB in range(cewe_dct['bins']):
+                    thisn = cewe_scatter_dct['histogram2D_count'][mynrA, mynrB, iB, iA]
+                    
+                    varA    += thisn * (diff(cvalueA[iA], muA, myangA)**2.)
+                    varB    += thisn * (diff(cvalueB[iB], muB, myangB)**2.)
+                    covAB   += thisn * diff(cvalueA[iA], muA, myangA) * diff(cvalueB[iB], muB, myangB)
+            
+            varA /= n
+            varB /= n
+            covAB /= n
+
+            lsf_B = covAB / varA
+            lsf_A = muB - lsf_B * muA
+                        
+            #Improve the correction if one of the two variables is angular
+            if angularA or angularB:
+                varA = 0.
+                varB = 0.
+                covAB = 0.
+                for iA in range(output_cewe_dct['bins']):
+                    for iB in range(output_cewe_dct['bins']):
+                        thisn = myscatterdct['histogram2d'][mynrA, mynrB, iB, iA]
+                        myvalA = cvalueA[iA]
+                        myvalB = cvalueB[iB]
+                        
+                        #clip towards the fitted line
+                        if angularA:
+                            X = (myvalB - lsf_A) / lsf_B
+                            myvalA = X + mydiff(myvalA, X)
+                        if angularB:
+                            Y = lsf_A + lsf_B * myvalA
+                            myvalB = Y + mydiff(myvalB, Y)
+                                            
+                        varA    += thisn * ((myvalA - muA) ** 2.)
+                        varB    += thisn * ((myvalB - muB) ** 2.)
+                        covAB   += thisn * (myvalA - muA) * (myvalB - muB)
+                
+                varA    /= n
+                varB    /= n
+                covAB   /= n
+                
+            cewe_scatter_dct['varianceA'][mynrA, mynrB]      = varA
+            cewe_scatter_dct['varianceB'][mynrA, mynrB]      = varB
+            cewe_scatter_dct['covarianceAB'][mynrA, mynrB]  = covAB
+
+    #post calculations
+    cewe_scatter_dct['leastsquaresfit_D']       = cewe_scatter_dct['covarianceAB'] / cewe_scatter_dct['varianceA']
+    cewe_scatter_dct['leastsquaresfit_C']       = cewe_scatter_dct['meanB'] - (cewe_scatter_dct['leastsquaresfit_D'] * cewe_scatter_dct['meanA'])
+    cewe_scatter_dct['correlationcoefficientAB'] = cewe_scatter_dct['covarianceAB'] / np.sqrt(cewe_scatter_dct['varianceA'] * cewe_scatter_dct['varianceB'])
 
 
-cewe_default_opts = {'bins':100, '_FillValue': -999.9}
+#Other more trivial functions
 
 def diff(x, y, ang=False):
     if not ang:
@@ -68,353 +402,7 @@ def covariance(x1, x2, ang1=False, ang2=False):
 def corrcoef(x1, x2, ang1 = False, ang2=False):
     return covariance(x1, x2, ang1, ang2) / np.sqrt(variance(x1, ang1) * variance(x2,ang2))
 
-def ok(x, opts=cewe_default_opts):
-    check = (False == (np.isinf(x) | np.isnan(x) | (x == opts['_FillValue'])))
+def ok(x, cewe_opts={}):
+    check = (False == (np.isinf(x) | np.isnan(x) | (x == cewe_opts['_FillValue'])))
     return check
     
-def calc_stats(data, input_opts={}):
-    opts = deepcopy(cewe_default_opts)
-    opts.update(input_opts)
-    
-    _FillValue = opts['_FillValue']
-    
-    dct = {}
-    dct['variables'] = sorted(data.keys())
-    dct['plotname'] = deepcopy(dct['variables'])
-    dct['units'] = deepcopy(dct['variables'])
-    dct['scalefactor'] = deepcopy(dct['variables'])
-    
-    for i in range(len(dct['variables'])):
-        myvar = dct['variables'][i]
-        dct['plotname'][i] = data[myvar]['plotname']
-        dct['units'][i] = data[myvar]['units']
-        dct['scalefactor'][i] = data[myvar]['scalefactor']
-       
-    #step 1: calculate simple statistics
-    dct['n']                = np.zeros(len(dct['variables'])) + _FillValue
-    dct['angular']          = np.zeros(len(dct['variables'])) + _FillValue
-    dct['mean']             = np.zeros(len(dct['variables'])) + _FillValue
-    dct['variance']         = np.zeros(len(dct['variables'])) + _FillValue
-    dct['distribution_val'] = np.zeros((len(dct['variables']),opts['bins'] + 1)) + _FillValue
-    dct['distribution_cdf'] = np.zeros((len(dct['variables']),opts['bins'] + 1)) + _FillValue
-
-    for mynr in range(len(dct['variables'])): 
-        myvar   = dct['variables'][mynr]
-        myok    = ok(data[myvar]['data'], opts)
-        myang   = data[myvar]['angular']
-        
-        dct['n'][mynr]  = np.sum(myok)
-        dct['angular'][mynr] = myang
-
-        if dct['n'][mynr] > 10:
-            mydata = np.compress(myok, data[myvar]['data'])                             
-        
-            #calculate mean, std, scoreatpercentile
-            dct['mean'][mynr]           = mean(mydata, ang=myang)
-            dct['variance'][mynr]       = variance(mydata, ang=myang)
-            [dct['distribution_val'][mynr], dct['distribution_cdf'][mynr]] = give_cdfval(mydata, myang, opts)
-
-            del mydata
-
-    if 'distribution_norm_ppt' in opts.keys():
-        dct['distribution_norm_ppt']   = opts['distribution_norm_ppt']
-            
-    #step 2: calculate scatter statistics.
-    scatter_dct = {}
-    sh1 = (len(dct['variables']), len(dct['variables']))
-    sh2 = (len(dct['variables']), len(dct['variables']), opts['bins'], opts['bins'])
-    sh3 = (len(dct['variables']),  opts['bins'] + 1)
-    sh4 = (len(dct['variables']),  opts['bins'])
-    scatter_dct['n']              = np.zeros(sh1) + _FillValue
-    scatter_dct['meanA']          = np.zeros(sh1) + _FillValue
-    scatter_dct['meanB']          = np.zeros(sh1) + _FillValue
-    scatter_dct['varianceA']      = np.zeros(sh1) + _FillValue
-    scatter_dct['varianceB']      = np.zeros(sh1) + _FillValue
-    scatter_dct['covarianceAB']   = np.zeros(sh1) + _FillValue
-
-    scatter_dct['histogram2D_bounds']           = np.zeros(sh3) + _FillValue
-    scatter_dct['histogram2D_central_value']    = np.zeros(sh4) + _FillValue
-    scatter_dct['histogram2D_values']           = np.zeros(sh2) + _FillValue
-
-    for mynrA in range(len(dct['variables'])):                
-        myvarA = dct['variables'][mynrA]
-        for mynrB in range(len(dct['variables'])):                
-            myvarB = dct['variables'][mynrB]
-        
-            myokAB =  ok(data[myvarA]['data'], opts) & ok(data[myvarB]['data'], opts)
-            myangA  = data[myvar]['angular']
-            myangB  = data[myvar]['angular']
-            
-            scatter_dct['n'][mynrA, mynrB] = np.sum(myokAB)
-
-            if scatter_dct['n'][mynrA, mynrB] > 10:             
-                mydataA = np.compress(myokAB, data[myvarA]['data'])                              
-                mydataB = np.compress(myokAB, data[myvarB]['data'])                              
-                
-                scatter_dct['meanA'][mynrA, mynrB]          = mean(mydataA, ang=myangA)
-                scatter_dct['meanB'][mynrA, mynrB]          = mean(mydataB, ang=myangB)
-                scatter_dct['varianceA'][mynrA, mynrB]      = variance(mydataA, ang=myangA)
-                scatter_dct['varianceB'][mynrA, mynrB]      = variance(mydataB, ang=myangB)
-                scatter_dct['covarianceAB'][mynrA, mynrB]   = covariance(mydataA, mydataB, myangA, myangB)
-
-                #2D histogram.
-                Amin, Amax = data[myvarA]['llim'], data[myvarA]['ulim']
-                Bmin, Bmax = data[myvarB]['llim'], data[myvarB]['ulim']
-
-                bins = [ np.linspace(Amin, Amax, opts['bins'] + 1),np.linspace(Bmin,Bmax, opts['bins'] + 1) ]
-                scatter_dct['histogram2D_bounds'][mynrA] = bins[0]
-                scatter_dct['histogram2D_central_value'][mynrA] = (bins[0][1:] + bins[0][:-1]) / 2.
-
-                dummy1, dummy2, dummy3 = np.histogram2d(mydataA, mydataB , bins, normed=False )
-                scatter_dct['histogram2D_values'][mynrA, mynrB] = np.transpose(dummy1) 
-
-    #post calculations
-    scatter_dct['leastsquaresfit_B'] = scatter_dct['covarianceAB'] / scatter_dct['varianceA']
-    scatter_dct['leastsquaresfit_A'] = scatter_dct['meanB'] - (scatter_dct['leastsquaresfit_B'] * scatter_dct['meanA'])
-    scatter_dct['correlationcoefficientAB'] = scatter_dct['covarianceAB'] / np.sqrt(scatter_dct['varianceA'] * scatter_dct['varianceB'])
-    dct['scatter'] = scatter_dct
-       
-    return dct             
-
-def give_bin_bounds(mu, si, opts= {}):
-    if not ('fstat_values_xx' in opts.keys()):
-        myn = opts['bins']
-        opts['distribution_norm_ppt'] = np.hstack(( (1./(10. * myn)), np.linspace(1./myn, 1.-(1./myn), myn-1), (1. - (1./ (10. * myn))) ))
-        opts['fstat_values_xx'] = stats.norm.ppf(opts['distribution_norm_ppt'])     
-    return mu + si * opts['fstat_values_xx']
-
-def give_cdfval(x, ang=False, opts = {}):
-    mu = mean(x, ang=ang)
-    si = np.sqrt(variance(x, ang=ang))
-    myv = give_bin_bounds(mu,si, opts)
-    myr = np.zeros(myv.shape)
-    
-    for i in range(len(myv)):
-        myr[i] = np.sum(x <= myv[i]) / (1. * len(x))
-        
-    return myv, myr
-
-
-  
-
-def update_stats(dct, extradct, opts={}):
-    #stats, case 1: no data in main dicionary yet
-    if len(dct.keys()) == 0:
-        dct.update(deepcopy(extradct))
-    else:
-        #stars, case 2: already data, update results
-        for mynr in range(len(dct['variables'])): 
-            n0  = dct['n'][mynr]
-            n1  = extradct['n'][mynr]
-            
-            if n1 <= 10:
-                continue
-            
-            #no results for this variable yet
-            if n0 <= 10:
-                dct['n'][mynr]                    = extradct['n'][mynr]
-                dct['mean'][mynr]                 = extradct['mean'][mynr]
-                dct['variance'][mynr]             = extradct['variance'][mynr] 
-                dct['distribution_val'][mynr]     = extradct['distribution_val'][mynr]
-                dct['distribution_cdf'][mynr]     = extradct['distribution_cdf'][mynr]
-                continue
-              
-            angular = int(dct['angular'][mynr])
-            opts['bins'] = len(dct['distribution_norm_ppt']) - 1
-       
-            n       = n0 + n1
-            mu0     = dct['mean'][mynr]
-            mu1     = extradct['mean'][mynr]
-            mu      = mean((mu0, mu1), (1. * n0/n, 1. * n1/n), angular)
-            var0    = dct['variance'][mynr]
-            var1    = extradct['variance'][mynr]        
-            var     = (1. / n) * ( n0 * var0 + n0 * (diff(mu0, mu, angular) ** 2.) + n1 * var1 + n1 * (diff(mu1, mu, angular) ** 2.)  )
-
-
-            distribution_val0   = dct['distribution_val'][mynr]
-            distribution_val1   = extradct['distribution_val'][mynr]
-            distribution_val    = give_bin_bounds(mu,np.sqrt(var), opts)
-            distribution_cdf0   = dct['distribution_cdf'][mynr]
-            distribution_cdf1   = extradct['distribution_cdf'][mynr]
-            
-            if var0 == 0.:
-                cdfval_i0   = np.repeat(np.nan, len(myvalues))
-            else:
-                cdfval_i0   = interp1d(distribution_val0, distribution_cdf0 , kind='linear', bounds_error=False, fill_value=np.nan)(distribution_val)
-            
-            if var1 == 0.:
-                cdfval_i1   = np.repeat(np.nan, len(myvalues))
-            else:
-                cdfval_i1   = interp1d(distribution_val1, distribution_cdf1 , kind='linear', bounds_error=False, fill_value=np.nan)(distribution_val)
-            
-            cdfval_i0   = np.where(np.isnan(cdfval_i0) | (cdfval_i0 > 1.) | (cdfval_i0 < 0.), (np.sign(distribution_val - mu0) + 1.)/2. , cdfval_i0)
-            cdfval_i1   = np.where(np.isnan(cdfval_i1) | (cdfval_i1 > 1.) | (cdfval_i1 < 0.), (np.sign(distribution_val - mu1) + 1.)/2. , cdfval_i1)
-
-            distribution_cdf      = (1. * n0 * cdfval_i0 + 1. * n1 * cdfval_i1) / n
-            distribution_cdf[0]   = 0.
-            distribution_cdf[-1]  = 1.
-
-            dct['n'][mynr]                    = n            
-            dct['mean'][mynr]                 = mu
-            dct['variance'][mynr]             = var
-            dct['distribution_val'][mynr]     = distribution_val
-            dct['distribution_cdf'][mynr]     = distribution_cdf
-
-        #scatterstats
-        scatter_dct         = dct['scatter']
-        extrascatter_dct    = extradct['scatter']
-            
-        #scatterstats, case 1: no data in main dicionary yet
-        if len(scatter_dct.keys()) == 0:
-            scatter_dct.update(deepcopy(extrascatter_dct))
-
-        #scatterstats, case 2: already data, update results
-        for mynrA in range(len(dct['variables'])):                
-            for mynrB in range(len(dct['variables'])):             
-                n0  = scatter_dct['n'][mynrA, mynrB]
-                n1  = extrascatter_dct['n'][mynrA, mynrB]
-                
-                myangA = int(dct['angular'][mynrA])
-                myangB = int(dct['angular'][mynrB])
-                
-                if n1 <= 10:
-                    #nothing to add
-                    continue
-                    
-                #no results for this variable yet
-                if n0 <= 10:
-                    scatter_dct['n'][mynrA, mynrB]              = extrascatter_dct['n'][mynrA, mynrB]
-                    scatter_dct['meanA'][mynrA, mynrB]          = extrascatter_dct['meanA'][mynrA, mynrB]
-                    scatter_dct['meanB'][mynrA, mynrB]          = extrascatter_dct['meanB'][mynrA, mynrB]
-                    scatter_dct['varianceA'][mynrA, mynrB]      = extrascatter_dct['varianceA'][mynrA, mynrB]
-                    scatter_dct['varianceB'][mynrA, mynrB]      = extrascatter_dct['varianceB'][mynrA, mynrB]
-                    scatter_dct['covarianceAB'][mynrA, mynrB]   = extrascatter_dct['covarianceAB'][mynrA, mynrB]
-                
-                n               = n0 + n1
-                muA0            = scatter_dct['meanA'][mynrA, mynrB]
-                muA1            = extrascatter_dct['meanA'][mynrA, mynrB]
-                muB0            = scatter_dct['meanB'][mynrA, mynrB]
-                muB1            = extrascatter_dct['meanB'][mynrA, mynrB]
-                muA             = mean((muA0, muA1), (1. * n0 / n, 1. * n1 / n), myangA)
-                muB             = mean((muB0, muB1), (1. * n0 / n, 1. * n1 / n), myangB)
-                
-                varA0           = scatter_dct['varianceA'][mynrA, mynrB]
-                varA1           = extrascatter_dct['varianceA'][mynrA, mynrB]
-                varA            = (1. / n) * ( n0 * varA0 + n0 * (diff(muA0,muA, myangA) ** 2.) + n1 * varA1 + n1 * (diff(muA1, muA, myangA) ** 2.)  )
-
-                varB0           = scatter_dct['varianceB'][mynrA, mynrB]
-                varB1           = extrascatter_dct['varianceB'][mynrA, mynrB]
-                varB            = (1. / n) * ( n0 * varB0 + n0 * (diff(muB0, muB, myangB) ** 2.) + n1 * varB1 + n1 * (diff(muB1, muB, myangB) ** 2.)  )
-                
-                #correlation coefficient
-                covAB0          = scatter_dct['covarianceAB'][mynrA, mynrB]
-                covAB1          = extrascatter_dct['covarianceAB'][mynrA, mynrB]
-                covAB =   ( \
-                                        ((1. * n0 / n) * covAB0) + ((1. * n0 / n) * diff(muA0, muA, myangA) * diff(muB0, muB, myangB)) + \
-                                        ((1. * n1 / n) * covAB1) + ((1. * n1 / n) * diff(muA1, muA, myangA) * diff(muB1, muB, myangB)) \
-                          )
-                    
-                scatter_dct['n'][mynrA, mynrB]           = n
-                scatter_dct['meanA'][mynrA, mynrB]          = muA
-                scatter_dct['meanB'][mynrA, mynrB]          = muB
-                scatter_dct['varianceA'][mynrA, mynrB]      = varA
-                scatter_dct['varianceB'][mynrA, mynrB]      = varB
-                scatter_dct['covarianceAB'][mynrA, mynrB]  = covAB
-
-                scatter_dct['histogram2D_values'][mynrA, mynrB]     = scatter_dct['histogram2D_values'][mynrA, mynrB] + extrascatter_dct['histogram2D_values'][mynrA, mynrB]
-                
-
-
-
-        #post calculations
-        scatter_dct['leastsquaresfit_B'] = scatter_dct['covarianceAB'] / scatter_dct['varianceA']
-        scatter_dct['leastsquaresfit_A'] = scatter_dct['meanB'] - (scatter_dct['leastsquaresfit_B'] * scatter_dct['meanA'])
-        scatter_dct['correlationcoefficientAB'] = scatter_dct['covarianceAB'] / np.sqrt(scatter_dct['varianceA'] * scatter_dct['varianceB'])
-        dct['scatter'] = scatter_dct
-           
-
-
-#with this function, variance and covariance are calculated from the 2d histogram
-#for angular variables, clipping is added to the least sqaures fit, to improve the result.
-def stats_from_histogram2d(dct, mynrA, mynrB, opts=cewe_default_opts):
-    #alternative way to calculate correlation coefficients
-    #alternative way to calculate correlation LSF parameters
-    #based on histogram 2d
-        
-    scatter_dct = dct['scatter']
-
-    for mynrA in range(len(dct['variables'])):                
-        for mynrB in range(len(dct['variables'])):
-            muA         = scatter_dct['meanA'][mynrA, mynrB]
-            muB         = scatter_dct['meanB'][mynrA, mynrB]
-            n           = scatter_dct['n'][mynrA, mynrB]
-
-            histogram2D_valuesA = scatter_dct['histogram2D_values'][mynrA]
-            histogram2D_valuesB = scatter_dct['histogram2D_values'][mynrB]
-
-            myangA = int(dct['angular'][mynrA])
-            myangB = int(dct['angular'][mynrB])  
-
-            #walk through the grid
-            varA = 0.
-            varB = 0.
-            covAB = 0.
-            for iA in range(opts['bins']):
-                for iB in range(opts['bins']):
-                    thisn = myscatterdct['histogram2D_values'][mynrA, mynrB, iB, iA]
-                    varA    += thisn * ((cvalueA[iA] - muA) ** 2.)
-                    varB    += thisn * ((cvalueB[iB] - muB) ** 2.)
-                    covAB   += thisn * (cvalueA[iA] - muA) * (cvalueB[iB] - muB)
-            
-            varA /= n
-            varB /= n
-            covAB /= n
-
-
-            lsf_B = covAB / varA
-            lsf_A = muB - lsf_B * muA
-            
-            
-            #now improve correction if one of the two variables is angular
-            if angularA or angularB:
-                varA = 0.
-                varB = 0.
-                covAB = 0.
-                for iA in range(opts['bins']):
-                    for iB in range(opts['bins']):
-                        thisn = myscatterdct['histogram2d'][mynrA, mynrB, iB, iA]
-                        myvalA = cvalueA[iA]
-                        myvalB = cvalueB[iB]
-                        
-                        #clip towards the fitted line
-                        if angularA:
-                            X = (myvalB - lsf_A) / lsf_B
-                            myvalA = X + mydiff(myvalA, X)
-                        if angularB:
-                            Y = lsf_A + lsf_B * myvalA
-                            myvalB = Y + mydiff(myvalB, Y)
-                        
-                    
-                        varA    += thisn * ((myvalA - muA) ** 2.)
-                        varB    += thisn * ((myvalB - muB) ** 2.)
-                        covAB   += thisn * (myvalA - muA) * (myvalB - muB)
-                
-                varA    /= n
-                varB    /= n
-                covAB   /= n
-                
-                lsf_B = covAB / varA
-                lsf_A = muB - lsf_B * muA
-
-
-            scatter_dct['varianceA'][mynrA, mynrB]      = varA
-            scatter_dct['varianceB'][mynrA, mynrB]      = varB
-            scatter_dct['covarianceAB'][mynrA, mynrB]  = covAB
-            
-
-
-
-    #post calculations
-    scatter_dct['lsf_B'] = scatter_dct['covarianceAB'] / scatter_dct['varianceA']
-    scatter_dct['lsf_A'] = scatter_dct['meanB'] - (scatter_dct['lsf_B'] * scatter_dct['meanA'])
-    scatter_dct['correlationcoefficientAB'] = scatter_dct['covarianceAB'] / np.sqrt(scatter_dct['varianceA'] * scatter_dct['varianceB'])
