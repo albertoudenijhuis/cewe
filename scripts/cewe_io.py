@@ -4,9 +4,10 @@ import warnings; warnings.simplefilter("ignore")
 import numpy as np
 import tables
 import os, subprocess
+from copy import deepcopy
 
 hdf5_cewe_descriptions = {
-"angular"							: "list (nvar) with True/False for each variable indicating whether angular variable of not",
+"circular"                          : "list (nvar) with True/False for each variable indicating whether circular variable of not",
 "histogram_bounds"                  : "array (nvar x (nbins +1)) with histogram bounds",
 "histogram_central_value"           : "array (nvar x nbins) with histogram central values",
 "histogram_count"                   : "array (nvar x nbins) with histogram counts",
@@ -23,57 +24,40 @@ hdf5_cewe_descriptions = {
 }
 
 hdf5_cewe_scatter_descriptions = {
-"covarianceAB"                      : "array (nvar x nvar) with covariance of variable A and B",
-"correlationcoefficientAB"          : "array (nvar x nvar) with correlation coefficient of variable A and B",
+"covarianceXY"                      : "array (nvar x nvar) with covariance of variable X and Y",
+"correlationcoefficientXY"          : "array (nvar x nvar) with correlation coefficient of variable X and Y",
 "histogram2D_count"                 : "array (nvar x nvar x nbins x nbins) with 2D histogram counts",
-"leastsquaresfit_C"                 : "array (nvar x nvar) with least squares fit parameter C",
-"leastsquaresfit_D"                 : "array (nvar x nvar) with least squares fit parameter D",
-"meanA"                             : "array (nvar x nvar) with mean of variable A",
-"meanB"                             : "array (nvar x nvar) with mean of variable B",
+"leastsquaresfit_P1"                : "array (nvar x nvar) with least squares fit parameter P1",
+"leastsquaresfit_P2"                : "array (nvar x nvar) with least squares fit parameter P2",
+"leastsquaresfit_P3"                : "array (nvar x nvar) with least squares fit parameter P3",
+"meanX"                             : "array (nvar x nvar) with mean of variable X",
+"meanY"                             : "array (nvar x nvar) with mean of variable Y",
 "nsamples"                          : "array (nvar x nvar) with number of samples",
-"varianceA"                         : "array (nvar x nvar) with variance of variable A",
-"varianceB"                         : "array (nvar x nvar) with variance of variable B",
+"varianceX"                         : "array (nvar x nvar) with variance of variable X",
+"varianceY"                         : "array (nvar x nvar) with variance of variable Y",
 }
 
 def read_cewe_hdf5_file(cewe_hdf5_filename):
     cewe_dct = {}
     
     new = {}
-    new['href'] 	= tables.openFile(cewe_hdf5_filename, 'r')
-    new['root'] 	= new['href'].root
-    new['scatter'] 	= new['root'].scatter
+    new['href']     = tables.openFile(cewe_hdf5_filename, 'r')
+    new['root']     = new['href'].root
+    new['scatter']  = new['root'].scatter
 
-    for myvar in [
-        'angular',
-        'histogram_bounds',
-        'histogram_central_value',
-        'histogram_count',
-        'mean',
-        'nsamples',
-        'plotname',
-        'scalefactor',
-        'units',
-        'variables',
-        'variance',
-        ]:
+    mylst = deepcopy(hdf5_cewe_descriptions.keys())
+    mylst.remove('nbins')
+    mylst.remove('nvars')
+    mylst.remove('scatter')
+
+    for myvar in mylst:
         cewe_dct[myvar] = new['root']._f_getChild(myvar)[:]
 
     cewe_dct['nvars'] = cewe_dct['nsamples'].shape[0]
     cewe_dct['nbins'] = cewe_dct['histogram_central_value'].shape[1]
 
     cewe_scatter_dct = {}
-    for myvar in [
-        'covarianceAB',
-        'correlationcoefficientAB',
-        'histogram2D_count',
-        'leastsquaresfit_C',
-        'leastsquaresfit_D',
-        'meanA',
-        'meanB',
-        'nsamples',
-        'varianceA',
-        'varianceB',
-        ]:
+    for myvar in hdf5_cewe_scatter_descriptions.keys():
         cewe_scatter_dct[myvar] = new['scatter']._f_getChild(myvar)[:]
 
     cewe_dct['scatter'] = cewe_scatter_dct
@@ -85,42 +69,20 @@ def write_cewe_hdf5_file(cewe_hdf5_filename, cewe_dct, _FillValue = -999.9):
     hdf5_temp_file = cewe_hdf5_filename[:-3] + "_temp.h5" 
 
     new = {}
-    new['href'] 	= tables.openFile(hdf5_temp_file, 'w')
-    new['root'] 	= new['href'].root
-    new['scatter'] 	= new['href'].createGroup("/", 'scatter', 'scatter statistics')
+    new['href']     = tables.openFile(hdf5_temp_file, 'w')
+    new['root']     = new['href'].root
+    new['scatter']  = new['href'].createGroup("/", 'scatter', 'scatter statistics')
 
+    mylst = deepcopy(hdf5_cewe_descriptions.keys())
+    mylst.remove('scatter')
+    
     #write data
-    for myvar in [
-        'angular',
-        'histogram_bounds',
-        'histogram_central_value',
-        'histogram_count',
-        'mean',
-        'nbins',
-        'nsamples',
-        'nvars',
-        'plotname',
-        'scalefactor',
-        'units',
-        'variables',
-        'variance',
-        ]:
+    for myvar in mylst:
         new['href'].createArray(new['root'], myvar, cewe_dct[myvar])
         new['href'].setNodeAttr(new['root']._f_getChild(myvar), 'description', hdf5_cewe_descriptions[myvar])
 
     cewe_scatter_dct = cewe_dct['scatter']
-    for myvar in [
-        'covarianceAB',
-        'correlationcoefficientAB',
-        'histogram2D_count',
-        'leastsquaresfit_C',
-        'leastsquaresfit_D',
-        'meanA',
-        'meanB',
-        'nsamples',
-        'varianceA',
-        'varianceB',
-        ]:    
+    for myvar in hdf5_cewe_scatter_descriptions.keys():
         new['href'].createArray(new['scatter'], myvar, \
             np.where(np.isnan(cewe_scatter_dct[myvar]), _FillValue, cewe_scatter_dct[myvar]) )
 

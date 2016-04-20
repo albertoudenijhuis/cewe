@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
+import numpy as np
+
 dataset_attributes = {}
 
 dataset_attributes['A'] = {
-	'angular': False,
+	'circular': False,
 	'llim': -3.,
 	'ulim': 3.,
 	'plotname': 'A',
@@ -11,15 +13,15 @@ dataset_attributes['A'] = {
 	'scalefactor': 1.,
 	}
 dataset_attributes['B'] = {
-	'angular': True,
-	'llim': -3.,
-	'ulim': 3.,
+	'circular': True,
+	'llim': 0.,
+	'ulim': 2 * np.pi,
 	'plotname': 'B',
 	'units': '-',
 	'scalefactor': 1.,
 	}
 dataset_attributes['C'] = {
-	'angular': False,
+	'circular': False,
 	'llim': -3.,
 	'ulim': 3.,
 	'plotname': 'C',

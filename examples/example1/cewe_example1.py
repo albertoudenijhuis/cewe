@@ -12,11 +12,11 @@ def give_random_dataset():
 	dataset = {}
 	dataset.update(dataset_attributes)
 
-	dataset['A']['samples'] = np.random.normal(size=nsamples),
-	dataset['B']['samples'] = np.random.normal(size=nsamples),
-	dataset['C']['samples'] = dataset['A']['samples'] + dataset['B']['samples'] + 0.1 * np.random.normal(size=nsamples)
+	dataset['A']['samples'] = np.random.normal(size=nsamples)
+	dataset['B']['samples'] = np.random.normal(size=nsamples) % 360.
+	dataset['C']['samples'] = dataset['A']['samples'] + (0.001 * dataset['B']['samples']) + 0.1 * np.random.normal(size=nsamples)
 		
-	pprint(dataset)
+	#pprint(dataset)
 	
 	return dataset
 	
