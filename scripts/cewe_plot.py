@@ -7,7 +7,7 @@ from copy import deepcopy
 import matplotlib; matplotlib.use( 'Agg' )
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as PathEffects
-
+	
 import tempfile
 import re
 
@@ -48,8 +48,8 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
 
     xlab = cewe_dct['plotname'][mynrX] + " ["+cewe_dct['units'][mynrX]+"]"
     ylab = cewe_dct['plotname'][mynrY] + " ["+cewe_dct['units'][mynrY]+"]"
-    ax.set_xlabel(xlab, fontsize=fontsize0)
-    ax.set_ylabel(ylab, fontsize=fontsize0)
+    ax.set_xlabel(xlab, fontsize=fontsize1)
+    ax.set_ylabel(ylab, fontsize=fontsize1)
 
     x = cewe_dct['histogram_central_value'][mynrX]
     y = cewe_dct['histogram_central_value'][mynrY]
@@ -104,10 +104,10 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
     ax.plot(xmin + ((xmax - xmin) * 0.2 * ypdf), y, **pltstyle1)
 
     for label in ax.xaxis.get_ticklabels():
-        label.set_fontsize(fontsize0)
+        label.set_fontsize(fontsize1)
                         
     for label in ax.yaxis.get_ticklabels():
-        label.set_fontsize(fontsize0)
+        label.set_fontsize(fontsize1)
 
     if 'log10' in opts.keys():
         lvls    = range(0,maxvar +1)
