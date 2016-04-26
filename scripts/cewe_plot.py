@@ -138,7 +138,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
 
     if ((mycircX) and (not mycircY)):
         #info on correlation
-        inf0    = "$r_{\ThetaY}$ = "+"{:.2f}".format(this['coef'])
+        inf0    = "$r_{\Theta Y}$ = "+"{:.2f}".format(this['coef'])
 
         this['P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY]
         this['P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY]
