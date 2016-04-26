@@ -4,11 +4,10 @@ import warnings; warnings.simplefilter("ignore")
 import numpy as np
 from copy import deepcopy
 
-import matplotlib
-matplotlib.use( 'Agg' )
+import matplotlib; matplotlib.use( 'Agg' )
 import matplotlib.pyplot as plt
-
 import matplotlib.patheffects as PathEffects
+
 import tempfile
 import re
 
@@ -92,7 +91,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
 
     maxvar = np.max(this['var'])
     if maxvar <= 0.:
-        raise ValueError, 'maxvar not okee.'
+        ax.text(0.2, 0.5, "no points", fontsize=fontsize0*2)        
     maxvar = int(np.ceil(maxvar))
 
     this['var']     = np.flipud(this['var'])        
@@ -204,10 +203,6 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
     txt0 = ax.text(0.04,0.90, inf0 , fontsize=fontsize1, transform = ax.transAxes)
     txt0.set_path_effects([PathEffects.withStroke(linewidth=5, foreground="w")])
 
-    tf = tempfile.NamedTemporaryFile(suffix=".png")
-    myname = tf.name 
-
-
     ax.set_xbound(xmin, xmax)
     ax.set_ybound(ymin, ymax)
 
@@ -215,7 +210,20 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
 
     plt.tight_layout()
 
-    plt.savefig("scatterplots/png/{:_<25}_vs_{:_<25}.png".format(myvarY, myvarX))
+    if 'givemesrc' in opts.keys():
+        tf = tempfile.NamedTemporaryFile(suffix=".png")
+        myname = tf.name 
+    else:
+        myname = "scatterplots/png/{:_<25}_vs_{:_<25}.png".format(myvarY, myvarX)       
+
+    plt.savefig(myname)
     plt.close(fig)
 
-    
+    if 'givemesrc' in opts.keys():
+        f = open(myname, "r")
+        figsrc = f.read()
+        f.close()
+        tf.close()
+        return figsrc
+
+
