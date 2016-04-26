@@ -169,6 +169,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         
         fct_y       = 2. * np.pi / (ymax - ymin)
         fit_y       = (1. / fct_y) * np.arctan2(fit_y_sin, fit_y_cos)
+        fit_y	= ymin + (fit_y % (ymax - ymin))
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
 
     if ((mycircX) and (mycircY)):
@@ -192,6 +193,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
 
         fct_y       = 2. * np.pi / (ymax - ymin)
         fit_y       = (1. / fct_y) * np.arctan2(fit_y_sin, fit_y_cos)
+        fit_y	= ymin + (fit_y % (ymax - ymin))
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
 
 
