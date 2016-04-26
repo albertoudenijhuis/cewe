@@ -171,7 +171,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         fit_y       = (1. / fct_y) * np.arctan2(fit_y_sin, fit_y_cos)
         fit_y       = ymin + (fit_y % (ymax - ymin))
         
-        fit_y       = np.where( np.hstack((0, np.abs(fit_y[1:] - fit_y[:-1]) > (0.7 * (ymax - ymin)) )) , fit_y, np.nan)
+        fit_y       = np.where( np.hstack((1, np.abs(fit_y[1:] - fit_y[:-1]) < (0.7 * (ymax - ymin)) )) , fit_y, np.nan)
         
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
 
@@ -198,7 +198,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         fit_y       = (1. / fct_y) * np.arctan2(fit_y_sin, fit_y_cos)
         fit_y       = ymin + (fit_y % (ymax - ymin))
 
-        fit_y       = np.where( np.hstack((0, np.abs(fit_y[1:] - fit_y[:-1]) > (0.7 * (ymax - ymin)) )) , fit_y, np.nan)
+        fit_y       = np.where( np.hstack((1, np.abs(fit_y[1:] - fit_y[:-1]) < (0.7 * (ymax - ymin)) )) , fit_y, np.nan)
 
 
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
