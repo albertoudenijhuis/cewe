@@ -219,8 +219,11 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
 
     plt.tight_layout()
 
-    if 'givemesrc' in opts.keys():
+    if 'givemepngsrc' in opts.keys():
         tf = tempfile.NamedTemporaryFile(suffix=".png")
+        myname = tf.name 
+    elif 'givemeepssrc' in opts.keys():
+        tf = tempfile.NamedTemporaryFile(suffix=".eps")
         myname = tf.name 
     else:
         myname = "scatterplots/png/{:_<25}_vs_{:_<25}.png".format(myvarY, myvarX)       
@@ -228,11 +231,9 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
     plt.savefig(myname)
     plt.close(fig)
 
-    if 'givemesrc' in opts.keys():
+    if (('givemepngsrc' in opts.keys()) or ('givemeepssrc' in opts.keys())):
         f = open(myname, "r")
         figsrc = f.read()
         f.close()
         tf.close()
         return figsrc
-
-
