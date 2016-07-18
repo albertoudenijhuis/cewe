@@ -52,6 +52,10 @@ Revision History
 ================
 March 3th, 2016
 - Code updated such that it can be used more easily.
+
+July 15th, 2016
+- Code updated. Raw moments and a mixed moment are now used in the calculations to add skewness and kurtosis conveniently.
+
 '''
 
 

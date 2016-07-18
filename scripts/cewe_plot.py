@@ -18,24 +18,24 @@ def stripslashes(s):
     r = re.sub(r"/", "", r)
     return r
     
-def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
+def scatter_density_plot(myfile, myvarx, myvary, opts={}):
     cewe_dct = cewe_io.read_cewe_hdf5_file(myfile)
     cewe_scatter_dct = cewe_dct['scatter']
 
-    mynrX = np.argmax(np.array(cewe_dct['variables']) == myvarX)
-    mynrY = np.argmax(np.array(cewe_dct['variables']) == myvarY)
-    mycircX = cewe_dct['circular'][mynrX]
-    mycircY = cewe_dct['circular'][mynrY]
+    mynrx = np.argmax(np.array(cewe_dct['variables']) == myvarx)
+    mynry = np.argmax(np.array(cewe_dct['variables']) == myvary)
+    mycircx = cewe_dct['circular'][mynrx]
+    mycircy = cewe_dct['circular'][mynry]
     
-    if mycircX:
-        mynrX_cos   = np.argmax(np.array(cewe_dct['variables']) == (myvarX+'_cartesian_cos'))
-        mynrX_sin   = np.argmax(np.array(cewe_dct['variables']) == (myvarX+'_cartesian_sin'))
-    if mycircY:
-        mynrY_cos   = np.argmax(np.array(cewe_dct['variables']) == (myvarY+'_cartesian_cos'))
-        mynrY_sin   = np.argmax(np.array(cewe_dct['variables']) == (myvarY+'_cartesian_sin'))
+    if mycircx:
+        mynrx_cos   = np.argmax(np.array(cewe_dct['variables']) == (myvarx+'_cartesian_cos'))
+        mynrx_sin   = np.argmax(np.array(cewe_dct['variables']) == (myvarx+'_cartesian_sin'))
+    if mycircy:
+        mynry_cos   = np.argmax(np.array(cewe_dct['variables']) == (myvary+'_cartesian_cos'))
+        mynry_sin   = np.argmax(np.array(cewe_dct['variables']) == (myvary+'_cartesian_sin'))
         
     mycmap = plt.cm.YlOrRd
-
+            
     fig = plt.figure(figsize=(4,4))
 
     fontsize0=16
@@ -46,18 +46,18 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
     ax = fig.add_subplot(111)
     ax.grid(True)
 
-    xlab = cewe_dct['plotname'][mynrX] + " ["+cewe_dct['units'][mynrX]+"]"
-    ylab = cewe_dct['plotname'][mynrY] + " ["+cewe_dct['units'][mynrY]+"]"
+    xlab = cewe_dct['plotname'][mynrx] + " ["+cewe_dct['units'][mynrx]+"]"
+    ylab = cewe_dct['plotname'][mynry] + " ["+cewe_dct['units'][mynry]+"]"
     ax.set_xlabel(xlab, fontsize=fontsize1)
     ax.set_ylabel(ylab, fontsize=fontsize1)
 
-    x = cewe_dct['histogram_central_value'][mynrX]
-    y = cewe_dct['histogram_central_value'][mynrY]
-    xmin, xmax = cewe_dct['histogram_bounds'][mynrX][0], cewe_dct['histogram_bounds'][mynrX][-1]
-    ymin, ymax = cewe_dct['histogram_bounds'][mynrY][0], cewe_dct['histogram_bounds'][mynrY][-1]
+    x = cewe_dct['histogram_central_value'][mynrx]
+    y = cewe_dct['histogram_central_value'][mynry]
+    xmin, xmax = cewe_dct['histogram_bounds'][mynrx][0], cewe_dct['histogram_bounds'][mynrx][-1]
+    ymin, ymax = cewe_dct['histogram_bounds'][mynry][0], cewe_dct['histogram_bounds'][mynry][-1]
         
     this = {}
-    this['var'] = deepcopy(cewe_scatter_dct['histogram2D_count'][mynrX, mynrY])
+    this['var'] = deepcopy(cewe_scatter_dct['histogram2D_count'][mynrx, mynry])
     
     #translate to density
     this['var'] = (1. * this['var']) / np.sum(this['var'])
@@ -66,11 +66,11 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
     xpdf = np.zeros(cewe_dct['nbins'])
     ypdf = np.zeros(cewe_dct['nbins'])              
     for i in range(len(this['var'])):
-        xpdf[i] = np.sum(this['var'][:,i])
-        ypdf[i] = np.sum(this['var'][i,:])
+        xpdf[i] = 1. * np.sum(this['var'][:,i])
+        ypdf[i] = 1. * np.sum(this['var'][i,:])
     xpdf /= np.max(xpdf)
     ypdf /= np.max(ypdf)
-    
+        
     if 'xdistscaling' in opts.keys():
         for i in range(len(this['var'])):
             ysum = np.sum(this['var'][:,i])
@@ -87,7 +87,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         this['var'] = np.log10(this['var'])
         this['var'] = np.where(np.isinf(this['var']) | np.isnan(this['var']), -100., this['var'])
         
-    X,Y = np.meshgrid(x, y)
+    #x,y = np.meshgrid(x, y)
 
     maxvar = np.max(this['var'])
     if maxvar <= 0.:
@@ -122,27 +122,27 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
     for t in mycolorbar2.ax.get_yticklabels():
          t.set_fontsize(fontsize1)
 
-    this['coef']    = cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY]
+    this['coef']    = cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry]
 
-    if ((not mycircX) and (not mycircY)):
+    if ((not mycircx) and (not mycircy)):
         #info on correlation
-        inf0    = "$r_{XY}$ = "+"{:.2f}".format(this['coef'])
+        inf0    = "$r_{xy}$ = "+"{:.2f}".format(this['coef'])
 
-        this['P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY]
-        this['P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY]
+        this['beta0']      = cewe_scatter_dct['leastsquaresfit_beta0'][mynrx, mynry]
+        this['beta1']      = cewe_scatter_dct['leastsquaresfit_beta1'][mynrx, mynry]
         
         #gefitte lijn
         rx = np.array([xmin, xmax])
-        fit_y= this['P1'] + (this['P2'] * rx)
+        fit_y= this['beta0'] + (this['beta1'] * rx)
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
 
-    if ((mycircX) and (not mycircY)):
+    if ((mycircx) and (not mycircy)):
         #info on correlation
-        inf0    = "$r_{\Theta Y}$ = "+"{:.2f}".format(this['coef'])
+        inf0    = r"$r_{\theta y}$ = "+"{:.2f}".format(this['coef'])
 
-        this['P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY]
-        this['P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY]
-        this['P3']      = cewe_scatter_dct['leastsquaresfit_P3'][mynrX, mynrY]
+        this['beta0']      = cewe_scatter_dct['leastsquaresfit_circ_beta0'][mynrx, mynry]
+        this['beta1']      = cewe_scatter_dct['leastsquaresfit_circ_beta1'][mynrx, mynry]
+        this['beta2']      = cewe_scatter_dct['leastsquaresfit_circ_beta2'][mynrx, mynry]
 
         #gefitte lijn
         rx      = np.linspace(xmin, xmax, 100)
@@ -150,22 +150,22 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         rx_cos  = np.cos(fct_x * rx)
         rx_sin  = np.sin(fct_x * rx)
         
-        fit_y   = this['P1'] + (this['P2'] * rx_cos) + (this['P3'] * rx_sin)
+        fit_y   = this['beta0'] + (this['beta1'] * rx_cos) + (this['beta2'] * rx_sin)
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
 
-    if ((not mycircX) and (mycircY)):
+    if ((not mycircx) and (mycircy)):
         #info on correlation
-        inf0    = "$r_{X\Theta}$ = "+"{:.2f}".format(this['coef'])
+        inf0    = r"$r_{x \theta}$ = "+"{:.2f}".format(this['coef'])
 
-        this['Y_cos_P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY_cos]
-        this['Y_cos_P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY_cos]
-        this['Y_sin_P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY_sin]
-        this['Y_sin_P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY_sin]
+        this['y_cos_beta0']      = cewe_scatter_dct['leastsquaresfit_circ_beta0'][mynrx, mynry_cos]
+        this['y_cos_beta1']      = cewe_scatter_dct['leastsquaresfit_circ_beta1'][mynrx, mynry_cos]
+        this['y_sin_beta0']      = cewe_scatter_dct['leastsquaresfit_circ_beta0'][mynrx, mynry_sin]
+        this['y_sin_beta1']      = cewe_scatter_dct['leastsquaresfit_circ_beta1'][mynrx, mynry_sin]
 
         #gefitte lijn
         rx          = np.linspace(xmin, xmax, 100)
-        fit_y_cos   = this['Y_cos_P1'] + (this['Y_cos_P2'] * rx) 
-        fit_y_sin   = this['Y_sin_P1'] + (this['Y_sin_P2'] * rx) 
+        fit_y_cos   = this['y_cos_beta0'] + (this['y_cos_beta1'] * rx) 
+        fit_y_sin   = this['y_sin_beta0'] + (this['y_sin_beta1'] * rx) 
         
         fct_y       = 2. * np.pi / (ymax - ymin)
         fit_y       = (1. / fct_y) * np.arctan2(fit_y_sin, fit_y_cos)
@@ -175,24 +175,24 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         
         ax.plot(rx,fit_y,'r--', linewidth=2, zorder=10)
 
-    if ((mycircX) and (mycircY)):
+    if ((mycircx) and (mycircy)):
         #info on correlation
-        inf0    = "$r_{\Theta\Phi}$ = "+"{:.2f}".format(this['coef'])
+        inf0    = r"$r_{\theta \phi}$ = "+"{:.2f}".format(this['coef'])
 
-        this['Y_cos_P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY_cos]
-        this['Y_cos_P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY_cos]
-        this['Y_cos_P3']      = cewe_scatter_dct['leastsquaresfit_P3'][mynrX, mynrY_cos]
-        this['Y_sin_P1']      = cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY_sin]
-        this['Y_sin_P2']      = cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY_sin]
-        this['Y_sin_P3']      = cewe_scatter_dct['leastsquaresfit_P3'][mynrX, mynrY_sin]
+        this['y_cos_beta0']      = cewe_scatter_dct['leastsquaresfit_circ_beta0'][mynrx, mynry_cos]
+        this['y_cos_beta1']      = cewe_scatter_dct['leastsquaresfit_circ_beta1'][mynrx, mynry_cos]
+        this['y_cos_beta2']      = cewe_scatter_dct['leastsquaresfit_circ_beta2'][mynrx, mynry_cos]
+        this['y_sin_beta0']      = cewe_scatter_dct['leastsquaresfit_circ_beta0'][mynrx, mynry_sin]
+        this['y_sin_beta1']      = cewe_scatter_dct['leastsquaresfit_circ_beta1'][mynrx, mynry_sin]
+        this['y_sin_beta2']      = cewe_scatter_dct['leastsquaresfit_circ_beta2'][mynrx, mynry_sin]
 
         rx      = np.linspace(xmin, xmax, 100)
         fct_x   = 2. * np.pi / (xmax - xmin)
         rx_cos  = np.cos(fct_x * rx)
         rx_sin  = np.sin(fct_x * rx)
 
-        fit_y_cos   = this['Y_cos_P1'] + (this['Y_cos_P2'] * rx_cos) + (this['Y_cos_P3'] * rx_sin) 
-        fit_y_sin   = this['Y_sin_P1'] + (this['Y_sin_P2'] * rx_cos) + (this['Y_sin_P3'] * rx_sin) 
+        fit_y_cos   = this['y_cos_beta0'] + (this['y_cos_beta1'] * rx_cos) + (this['y_cos_beta2'] * rx_sin) 
+        fit_y_sin   = this['y_sin_beta0'] + (this['y_sin_beta1'] * rx_cos) + (this['y_sin_beta2'] * rx_sin) 
 
         fct_y       = 2. * np.pi / (ymax - ymin)
         fit_y       = (1. / fct_y) * np.arctan2(fit_y_sin, fit_y_cos)
@@ -226,7 +226,7 @@ def scatter_density_plot(myfile, myvarX, myvarY, opts={}):
         tf = tempfile.NamedTemporaryFile(suffix=".eps")
         myname = tf.name 
     else:
-        myname = "scatterplots/png/{:_<25}_vs_{:_<25}.png".format(myvarY, myvarX)       
+        myname = "scatterplots/png/{:_<25}_vs_{:_<25}.png".format(myvary, myvarx)       
 
     plt.savefig(myname)
     plt.close(fig)

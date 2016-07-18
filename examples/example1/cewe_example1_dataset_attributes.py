@@ -17,7 +17,7 @@ dataset_attributes['B'] = {
 	'llim': 0.,
 	'ulim': 2 * np.pi,
 	'plotname': 'B',
-	'units': '-',
+	'units': 'rad',
 	'scalefactor': 1.,
 	}
 dataset_attributes['C'] = {
@@ -26,5 +26,13 @@ dataset_attributes['C'] = {
 	'ulim': 3.,
 	'plotname': 'C',
 	'units': '-',
+	'scalefactor': 1.,
+	}
+dataset_attributes['D'] = {
+	'circular': True,
+	'llim': 0.,
+	'ulim': 360.,
+	'plotname': 'B',
+	'units': 'deg',
 	'scalefactor': 1.,
 	}

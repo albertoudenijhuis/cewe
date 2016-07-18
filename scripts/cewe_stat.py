@@ -6,34 +6,36 @@ Part of the CEWE library. See cewe.py for the general details.
 
 For calculations CEWE dictionaries are used.
 
-A CEWE dictionary contains:
+A CEWE dictionary should always contain the following:
 "circular"                          : "list (nvar) with True/False for each variable indicating whether circular variable of not",
 "histogram_bounds"                  : "array (nvar x (nbins +1)) with histogram bounds",
 "histogram_central_value"           : "array (nvar x nbins) with histogram central values",
 "histogram_count"                   : "array (nvar x nbins) with histogram counts",
-"mean"                              : "list (nvar) with means of samples for each variable",
 "nbins"                             : "number of bins, that are used for the histograms",
 "nsamples"                          : "list (nvar) with number of samples for each variable",
 "nvars"                             : "number of variables",
 "plotname"                          : "list (nvar) with plot name for each variable",
+"raw_moment_mu_x1"                   : "list (nvar) with first raw moment of samples for each variable",
+"raw_moment_mu_x2"                   : "list (nvar) with second raw moment of samples for each variable",
+"raw_moment_mu_x3"                   : "list (nvar) with third raw moment of samples for each variable",
+"raw_moment_mu_x4"                   : "list (nvar) with fourth raw moment of samples for each variable",
 "scalefactor"                       : "list (nvar) with scale factor for each variable (used for plotting)",
 "scatter"                           : "a dictionary with all information of comparison of two variables A and B",
 "units"                             : "list (nvar) with units for each variable",
 "variables"                         : "list (nvar) with short name for each variable",
-"variance"                          : "list (nvar) with variances of samples for each variable",
 
-A CEWE scatter dictionary contains:
-"covarianceXY"                      : "array (nvar x nvar) with covariance of variable X and Y",
-"correlationcoefficientXY"          : "array (nvar x nvar) with correlation coefficient of variable X and Y",
+A CEWE scatter dictionary should always contain the following:
 "histogram2D_count"                 : "array (nvar x nvar x nbins x nbins) with 2D histogram counts",
-"leastsquaresfit_P1"                : "array (nvar x nvar) with least squares fit parameter P1",
-"leastsquaresfit_P2"                : "array (nvar x nvar) with least squares fit parameter P2",
-"leastsquaresfit_P3"                : "array (nvar x nvar) with least squares fit parameter P3",
-"meanX"                             : "array (nvar x nvar) with mean of variable X",
-"meanY"                             : "array (nvar x nvar) with mean of variable Y",
+"mixed_moment_nu"                   : "array (nvar x nvar) with mixed moment xy of samples for variable x and y",
 "nsamples"                          : "array (nvar x nvar) with number of samples",
-"varianceX"                         : "array (nvar x nvar) with variance of variable X",
-"varianceY"                         : "array (nvar x nvar) with variance of variable Y",
+"raw_moment_mu_x1"                  : "array (nvar x nvar) with first raw moment of samples for variable x",
+"raw_moment_mu_x2"                  : "array (nvar x nvar) with second raw moment of samples for variable x",
+"raw_moment_mu_x3"                  : "array (nvar x nvar) with third raw moment of samples for variable x",
+"raw_moment_mu_x4"                  : "array (nvar x nvar) with fourth raw moment of samples for variable x",
+"raw_moment_mu_y1"                  : "array (nvar x nvar) with first raw moment of samples for variable y",
+"raw_moment_mu_y2"                  : "array (nvar x nvar) with second raw moment of samples for variable y",
+"raw_moment_mu_y3"                  : "array (nvar x nvar) with third raw moment of samples for variable y",
+"raw_moment_mu_y4"                  : "array (nvar x nvar) with fourth raw moment of samples for variable y",
 
 To create a CEWE ditrionary, a dataset dictionary is used as input.
 
@@ -53,8 +55,8 @@ A variable dictionary contains (e.g. 'A')
 
 Most important Functions:
 create_cewe_dct                     : create CEWE dictionary given a dataset dictionary
-combine_cewe_dct                    : function that combines two CEWE dictionaries
-alternative_covariance_calculation  : alternative that calculate covariance from 2D histogram
+cewe_udpate							: calculate related statistics.
+combine_cewe_dct                    : function that combines two CEWE dictionaries.
 """
 
 
@@ -71,7 +73,6 @@ def create_cewe_dct(input_dataset, input_cewe_opts={}):
     #options
     cewe_opts = deepcopy(cewe_default_opts)
     cewe_opts.update(input_cewe_opts)
-
     _FillValue      = cewe_opts['_FillValue'][0]
 
     #copy dataset
@@ -139,8 +140,10 @@ def create_cewe_dct(input_dataset, input_cewe_opts={}):
     cewe_dct['histogram_bounds']        = np.zeros((cewe_dct['nvars'], cewe_dct['nbins'] + 1)) + _FillValue
     cewe_dct['histogram_central_value'] = np.zeros((cewe_dct['nvars'], cewe_dct['nbins'])) + _FillValue
     cewe_dct['histogram_count']         = np.zeros((cewe_dct['nvars'], cewe_dct['nbins'])) + _FillValue
-    cewe_dct['mean']                    = np.zeros(cewe_dct['nvars']) + _FillValue
-    cewe_dct['variance']                = np.zeros(cewe_dct['nvars']) + _FillValue
+    cewe_dct['raw_moment_mu_x1']         = np.zeros(cewe_dct['nvars']) + _FillValue
+    cewe_dct['raw_moment_mu_x2']         = np.zeros(cewe_dct['nvars']) + _FillValue
+    cewe_dct['raw_moment_mu_x3']         = np.zeros(cewe_dct['nvars']) + _FillValue
+    cewe_dct['raw_moment_mu_x4']         = np.zeros(cewe_dct['nvars']) + _FillValue
 
     #statistics, pass for linear statistics
     for mynr in range(cewe_dct['nvars']): 
@@ -159,19 +162,18 @@ def create_cewe_dct(input_dataset, input_cewe_opts={}):
         myok                        = ok(dataset[myvar]['samples'], cewe_opts)
         cewe_dct['nsamples'][mynr]  = np.sum(myok)
 
-        if cewe_dct['nsamples'][mynr] > 10:
-            mysamples = np.compress(myok, dataset[myvar]['samples'])                             
-                
-            if not mycirc:
-                #calculate mean and variance
-                cewe_dct['mean'][mynr]              = mean(mysamples)
-                cewe_dct['variance'][mynr]          = variance(mysamples)
-                
-            #histogram
-            myhistogram, dummy                  = np.histogram(mysamples, bins=cewe_dct['histogram_bounds'][mynr])
-            cewe_dct['histogram_count'][mynr]   = deepcopy(myhistogram)
+        mysamples = np.compress(myok, dataset[myvar]['samples'])                             
+            
+        if not mycirc:
+            #calculate raw moments
+            for i in [1,2,3,4]:
+                cewe_dct['raw_moment_mu_x'+str(i)][mynr] = raw_moment(mysamples, i)
+            
+        #histogram
+        myhistogram, dummy                  = np.histogram(mysamples, bins=cewe_dct['histogram_bounds'][mynr])
+        cewe_dct['histogram_count'][mynr]   = deepcopy(myhistogram)
 
-            del mysamples
+        del mysamples
 
                 
             
@@ -181,78 +183,113 @@ def create_cewe_dct(input_dataset, input_cewe_opts={}):
     sh1 = (cewe_dct['nvars'], cewe_dct['nvars'])
     sh2 = (cewe_dct['nvars'], cewe_dct['nvars'], cewe_dct['nbins'], cewe_dct['nbins'])
 
-    cewe_scatter_dct['nsamples']                    = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['meanX']                       = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['meanY']                       = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['varianceX']                   = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['varianceY']                   = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['covarianceXY']                = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['correlationcoefficientXY']    = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['leastsquaresfit_P1']          = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['leastsquaresfit_P2']          = np.zeros(sh1) + _FillValue
-    cewe_scatter_dct['leastsquaresfit_P3']          = np.zeros(sh1) + _FillValue
     cewe_scatter_dct['histogram2D_count']           = np.zeros(sh2) + _FillValue
-
+    cewe_scatter_dct['mixed_moment_nu']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['nsamples']                    = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_x1']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_x2']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_x3']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_x4']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_y1']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_y2']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_y3']             = np.zeros(sh1) + _FillValue
+    cewe_scatter_dct['raw_moment_mu_y4']             = np.zeros(sh1) + _FillValue
+    
     #scatter statistics, pass for linear statistics
-    for mynrX in range(cewe_dct['nvars']):   
-        myvarX = cewe_dct['variables'][mynrX]
-        for mynrY in range(cewe_dct['nvars']):  
-            myvarY = cewe_dct['variables'][mynrY]
+    for mynrx in range(cewe_dct['nvars']):   
+        myvarx = cewe_dct['variables'][mynrx]
+        for mynry in range(cewe_dct['nvars']):  
+            myvary = cewe_dct['variables'][mynry]
         
-            myokXY =  ok(dataset[myvarX]['samples'], cewe_opts) & ok(dataset[myvarY]['samples'], cewe_opts)
-            mycircX  = cewe_dct['circular'][mynrX]
-            mycircY  = cewe_dct['circular'][mynrY]
+            myokxy =  ok(dataset[myvarx]['samples'], cewe_opts) & ok(dataset[myvary]['samples'], cewe_opts)
+            mycircx  = cewe_dct['circular'][mynrx]
+            mycircy  = cewe_dct['circular'][mynry]
           
-            cewe_scatter_dct['nsamples'][mynrX, mynrY] = np.sum(myokXY)
+            cewe_scatter_dct['nsamples'][mynrx, mynry] = np.sum(myokxy)
 
-            if cewe_scatter_dct['nsamples'][mynrX, mynrY] > 10:             
-                mydataX = np.compress(myokXY, dataset[myvarX]['samples'])                              
-                mydataY = np.compress(myokXY, dataset[myvarY]['samples'])                              
-                
-                #mean
-                if not mycircX:
-                    cewe_scatter_dct['meanX'][mynrX, mynrY] = mean(mydataX)
-                if not mycircY:
-                    cewe_scatter_dct['meanY'][mynrX, mynrY] = mean(mydataY)
+            mydatax = np.compress(myokxy, dataset[myvarx]['samples'])                              
+            mydatay = np.compress(myokxy, dataset[myvary]['samples'])                              
+            
+            #calculate raw moments
+            if not mycircx:
+                for i in [1,2,3,4]:
+                    cewe_scatter_dct['raw_moment_mu_x'+str(i)][mynrx, mynry] = raw_moment(mydatax, i)
+                                    
+            if not mycircy:
+                for i in [1,2,3,4]:
+                    cewe_scatter_dct['raw_moment_mu_y'+str(i)][mynrx, mynry] = raw_moment(mydatay, i)
 
-                #variance
-                if not mycircX:
-                    cewe_scatter_dct['varianceX'][mynrX, mynrY] = variance(mydataX)
-                if not mycircY:
-                    cewe_scatter_dct['varianceY'][mynrX, mynrY] = variance(mydataY)
+            #calculate mixed moments
+            if ((not mycircx) and (not mycircy)):
+                cewe_scatter_dct['mixed_moment_nu'][mynrx, mynry]  = mixed_moment(mydatax, mydatay)
 
-                #covariance
-                if ((not mycircX) and (not mycircY)):
-                    cewe_scatter_dct['covarianceXY'][mynrX, mynrY]  = covariance(mydataX, mydataY)
+            #2D histogram.
+            x_llim, x_ulim = dataset[myvarx]['llim'], dataset[myvarx]['ulim']
+            y_llim, y_ulim = dataset[myvary]['llim'], dataset[myvary]['ulim']
 
-                #2D histogram.
-                X_llim, X_ulim = dataset[myvarX]['llim'], dataset[myvarX]['ulim']
-                Y_llim, Y_ulim = dataset[myvarY]['llim'], dataset[myvarY]['ulim']
+            bins = [ np.linspace(x_llim, x_ulim, cewe_dct['nbins'] + 1), np.linspace(y_llim, y_ulim, cewe_dct['nbins'] + 1) ]
 
-                bins = [ np.linspace(X_llim, X_ulim, cewe_dct['nbins'] + 1), np.linspace(Y_llim, Y_ulim, cewe_dct['nbins'] + 1) ]
-
-                dummy1, dummy2, dummy3 = np.histogram2d(mydataX, mydataY , bins, normed=False )
-                cewe_scatter_dct['histogram2D_count'][mynrX, mynrY] = np.transpose(dummy1) 
+            dummy1, dummy2, dummy3 = np.histogram2d(mydatax, mydatay , bins, normed=False )
+            cewe_scatter_dct['histogram2D_count'][mynrx, mynry] = np.transpose(dummy1) 
 
     #set scatter dictionary
     cewe_dct['scatter'] = cewe_scatter_dct
 
-    #calculations
-    cewe_update_circular(cewe_dct)
-    cewe_calc_correlation_and_lsf(cewe_dct)
+    #update
+    cewe_udpate(cewe_dct)
        
     return cewe_dct             
 
-def cewe_update_circular(cewe_dct):
+def cewe_udpate(cewe_dct, input_cewe_opts={}):
+    #options
+    cewe_opts = deepcopy(cewe_default_opts)
+    cewe_opts.update(input_cewe_opts)
+    _FillValue      = cewe_opts['_FillValue'][0]
+    
     cewe_scatter_dct    = cewe_dct['scatter']
     lst_vars            = np.array(cewe_dct['variables'])
 
+    #
+    #
+    #statistics, pass for linear
+    nvars = cewe_dct['nvars']
+
+    #
+    nsamples = cewe_dct['nsamples']
+    mu_x1 = cewe_dct['raw_moment_mu_x1']
+    mu_x2 = cewe_dct['raw_moment_mu_x2']
+    mu_x3 = cewe_dct['raw_moment_mu_x3']
+    mu_x4 = cewe_dct['raw_moment_mu_x4']
+
+    myfilter =    ((mu_x1 == _FillValue) | (nsamples < 2))
+
+    cewe_dct['mean']        = deepcopy(mu_x1)
+    
+    cewe_dct['variance']    = \
+        np.where(myfilter, _FillValue,
+            (nsamples / (nsamples - 1.)) * (mu_x2 - (mu_x1**2.))
+            )
+            
+    cewe_dct['skewness']    = \
+        np.where(myfilter, _FillValue,
+            (mu_x3 - (3. * mu_x2 * mu_x1) + (2. * (mu_x1 ** 3.)))
+            /
+            ((mu_x2 - (mu_x1 **2.)) ** (3./2.))
+            )
+
+    cewe_dct['kurtosis']    = \
+        np.where(myfilter, _FillValue,
+            (mu_x4 - (4. * mu_x1 * mu_x3) + (6. * (mu_x1 ** 2.) * mu_x2) - (3. * (mu_x1**4.)))
+            /
+            ((mu_x2 - (mu_x1 **2.)) ** 2.)
+            )
+    
     #statistics, pass for circular
-    for mynr in range(cewe_dct['nvars']): 
+    for mynr in range(nvars): 
         myvar                                       = cewe_dct['variables'][mynr]
         mycirc                                      = cewe_dct['circular'][mynr]
 
-        if cewe_dct['nsamples'][mynr] > 10:
+        if (cewe_dct['nsamples'][mynr] > 1):
             if mycirc:
                 mynr_cos                            = np.argmax(lst_vars == (myvar+'_cartesian_cos'))
                 mynr_sin                            = np.argmax(lst_vars == (myvar+'_cartesian_sin'))
@@ -261,130 +298,187 @@ def cewe_update_circular(cewe_dct):
                 cewe_dct['mean'][mynr]              = circ_mean(cewe_dct['mean'][mynr_cos], cewe_dct['mean'][mynr_sin])
                 cewe_dct['variance'][mynr]          = circ_variance(cewe_dct['mean'][mynr_cos], cewe_dct['mean'][mynr_sin])
 
-    #scatter statistics, pass for circular
-    for mynrX in range(cewe_dct['nvars']):   
-        myvarX = cewe_dct['variables'][mynrX]
-        for mynrY in range(cewe_dct['nvars']):  
-            myvarY = cewe_dct['variables'][mynrY]
+    #scatter statistics, pass for linear
+    cewe_scatter_dct['meanx'] = deepcopy(cewe_scatter_dct['raw_moment_mu_x1'])
+    cewe_scatter_dct['meany'] = deepcopy(cewe_scatter_dct['raw_moment_mu_y1'])
+
+    filter_samples = (cewe_scatter_dct['nsamples'] < 2) 
+    myfilterx = filter_samples |  (cewe_scatter_dct['raw_moment_mu_x1'] == _FillValue)
+    myfiltery = filter_samples |  (cewe_scatter_dct['raw_moment_mu_y1'] == _FillValue)
+    myfilterxy = filter_samples |  (cewe_scatter_dct['mixed_moment_nu'] == _FillValue)
+
+    cewe_scatter_dct['variancex']    = \
+        np.where(myfilterx, _FillValue,
+            ((cewe_scatter_dct['nsamples']) / (cewe_scatter_dct['nsamples'] - 1.)) * (cewe_scatter_dct['raw_moment_mu_x2'] - (cewe_scatter_dct['raw_moment_mu_x1']**2.))
+            )
+    cewe_scatter_dct['variancey']    = \
+        np.where(myfiltery, _FillValue,
+            ((cewe_scatter_dct['nsamples']) / (cewe_scatter_dct['nsamples'] - 1.)) * (cewe_scatter_dct['raw_moment_mu_y2'] - (cewe_scatter_dct['raw_moment_mu_y1']**2.))
+            )
+    cewe_scatter_dct['covariancexy']    = \
+        np.where(myfilterxy, _FillValue,
+            ((cewe_scatter_dct['nsamples']) / (cewe_scatter_dct['nsamples'] - 1.)) * (cewe_scatter_dct['mixed_moment_nu'] - (cewe_scatter_dct['raw_moment_mu_x1'] * cewe_scatter_dct['raw_moment_mu_y1']))
+            )
+                
+    #scatter statistics, first pass for circular
+    for mynrx in range(nvars):   
+        myvarx = cewe_dct['variables'][mynrx]
+        for mynry in range(nvars):  
+            myvary = cewe_dct['variables'][mynry]
         
-            mycircX  = cewe_dct['circular'][mynrX]
-            mycircY  = cewe_dct['circular'][mynrY]
+            mycircx  = cewe_dct['circular'][mynrx]
+            mycircy  = cewe_dct['circular'][mynry]
 
-            if mycircX:
-                mynrX_cos                           = np.argmax(lst_vars == (myvarX+'_cartesian_cos'))
-                mynrX_sin                           = np.argmax(lst_vars == (myvarX+'_cartesian_sin'))
-            if mycircY:
-                mynrY_cos                           = np.argmax(lst_vars == (myvarY+'_cartesian_cos'))
-                mynrY_sin                           = np.argmax(lst_vars == (myvarY+'_cartesian_sin'))
+            if mycircx:
+                mynrx_cos                           = np.argmax(lst_vars == (myvarx+'_cartesian_cos'))
+                mynrx_sin                           = np.argmax(lst_vars == (myvarx+'_cartesian_sin'))
+            if mycircy:
+                mynry_cos                           = np.argmax(lst_vars == (myvary+'_cartesian_cos'))
+                mynry_sin                           = np.argmax(lst_vars == (myvary+'_cartesian_sin'))
 
-            if cewe_scatter_dct['nsamples'][mynrX, mynrY] > 10:
-                #mean
-                if mycircX:
-                    cewe_scatter_dct['meanX'][mynrX, mynrY] = circ_mean(cewe_dct['mean'][mynrX_cos], cewe_dct['mean'][mynrX_sin])
-                if mycircY:
-                    cewe_scatter_dct['meanY'][mynrX, mynrY] = circ_mean(cewe_dct['mean'][mynrY_cos], cewe_dct['mean'][mynrY_sin])
+            #mean
+            if mycircx:
+                cewe_scatter_dct['meanx'][mynrx, mynry] = circ_mean(cewe_scatter_dct['meanx'][mynrx_cos, mynry], cewe_scatter_dct['meanx'][mynrx_sin, mynry])
+            if mycircy:
+                cewe_scatter_dct['meany'][mynrx, mynry] = circ_mean(cewe_scatter_dct['meany'][mynrx, mynry_cos], cewe_scatter_dct['meany'][mynrx, mynry_sin])
 
-                #variance
-                if mycircX:
-                    cewe_scatter_dct['varianceX'][mynrX, mynrY] = circ_variance(cewe_dct['mean'][mynrX_cos], cewe_dct['mean'][mynrX_sin])
-                if mycircY:
-                    cewe_scatter_dct['varianceY'][mynrX, mynrY] = circ_variance(cewe_dct['mean'][mynrY_cos], cewe_dct['mean'][mynrY_sin])                
+    #scatter statistics, second pass for circular
+    for mynrx in range(nvars):   
+        myvarx = cewe_dct['variables'][mynrx]
+        for mynry in range(nvars):  
+            myvary = cewe_dct['variables'][mynry]
+        
+            mycircx  = cewe_dct['circular'][mynrx]
+            mycircy  = cewe_dct['circular'][mynry]
+
+            if mycircx:
+                mynrx_cos                           = np.argmax(lst_vars == (myvarx+'_cartesian_cos'))
+                mynrx_sin                           = np.argmax(lst_vars == (myvarx+'_cartesian_sin'))
+            if mycircy:
+                mynry_cos                           = np.argmax(lst_vars == (myvary+'_cartesian_cos'))
+                mynry_sin                           = np.argmax(lst_vars == (myvary+'_cartesian_sin'))
+                
+            #variance
+            if mycircx:
+                cewe_scatter_dct['variancex'][mynrx, mynry] = circ_variance(cewe_scatter_dct['meanx'][mynrx_cos, mynry], cewe_scatter_dct['meanx'][mynrx_sin, mynry])
+            if mycircy:
+                cewe_scatter_dct['variancey'][mynrx, mynry] = circ_variance(cewe_scatter_dct['meany'][mynrx, mynry_cos], cewe_scatter_dct['meany'][mynrx, mynry_sin])
+
+            #covariance
+            if mycircx:
+                cewe_scatter_dct['covariancexy'][mynrx, mynry] = _FillValue
+            if mycircy:
+                cewe_scatter_dct['covariancexy'][mynrx, mynry] = _FillValue
 
 
-def cewe_calc_correlation_and_lsf(cewe_dct):
-    cewe_scatter_dct    = cewe_dct['scatter']
-    lst_vars            = np.array(cewe_dct['variables'])
+    #~
+    #~
+    #correlation coefficients
+    #least squares fit parameters
+    cewe_scatter_dct['correlationcoefficientxy']        = np.zeros((cewe_dct['nvars'], cewe_dct['nvars'])) + _FillValue
+    cewe_scatter_dct['leastsquaresfit_beta0']           = np.zeros((cewe_dct['nvars'], cewe_dct['nvars'])) + _FillValue
+    cewe_scatter_dct['leastsquaresfit_beta1']           = np.zeros((cewe_dct['nvars'], cewe_dct['nvars'])) + _FillValue
+
+    cewe_scatter_dct['leastsquaresfit_circ_beta0']      = np.zeros((cewe_dct['nvars'], cewe_dct['nvars'])) + _FillValue
+    cewe_scatter_dct['leastsquaresfit_circ_beta1']      = np.zeros((cewe_dct['nvars'], cewe_dct['nvars'])) + _FillValue
+    cewe_scatter_dct['leastsquaresfit_circ_beta2']      = np.zeros((cewe_dct['nvars'], cewe_dct['nvars'])) + _FillValue
 
     #pass for linear
-    for mynrX in range(cewe_dct['nvars']):                
-        myvarX = cewe_dct['variables'][mynrX]
-        for mynrY in range(cewe_dct['nvars']): 
-            myvarY = cewe_dct['variables'][mynrY]
+    for mynrx in range(nvars):                
+        myvarx = cewe_dct['variables'][mynrx]
+        for mynry in range(nvars): 
+            myvary = cewe_dct['variables'][mynry]
         
-            mycircX  = cewe_dct['circular'][mynrX]
-            mycircY  = cewe_dct['circular'][mynrY]
+            mycircx  = cewe_dct['circular'][mynrx]
+            mycircy  = cewe_dct['circular'][mynry]
 
             #correlation coefficient
-            if not (mycircX or mycircY):
-                cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY] = cewe_scatter_dct['covarianceXY'][mynrX, mynrY] / np.sqrt(cewe_scatter_dct['varianceX'][mynrX, mynrY] * cewe_scatter_dct['varianceY'][mynrX, mynrY])
+            if not (mycircx or mycircy):
+                cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry] = cewe_scatter_dct['covariancexy'][mynrx, mynry] / np.sqrt(cewe_scatter_dct['variancex'][mynrx, mynry] * cewe_scatter_dct['variancey'][mynrx, mynry])
 
             #least squares fit parameters
-            if not (mycircX or mycircY):
-                cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY], cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY] = \
+            if not (mycircx or mycircy):
+                cewe_scatter_dct['leastsquaresfit_beta0'][mynrx, mynry], cewe_scatter_dct['leastsquaresfit_beta1'][mynrx, mynry] = \
                     lsf_parameters(
-                        cewe_scatter_dct['meanX'][mynrX, mynrY],
-                        cewe_scatter_dct['meanY'][mynrX, mynrY],
-                        cewe_scatter_dct['varianceX'][mynrX, mynrY],
-                        cewe_scatter_dct['varianceY'][mynrX, mynrY],
-                        cewe_scatter_dct['covarianceXY'][mynrX, mynrY],
+                        cewe_scatter_dct['meanx'][mynrx, mynry],
+                        cewe_scatter_dct['meany'][mynrx, mynry],
+                        cewe_scatter_dct['variancex'][mynrx, mynry],
+                        cewe_scatter_dct['variancey'][mynrx, mynry],
+                        cewe_scatter_dct['covariancexy'][mynrx, mynry],
                     )                   
     
     #pass for circular
-    for mynrX in range(cewe_dct['nvars']):                
-        myvarX = cewe_dct['variables'][mynrX]
-        for mynrY in range(cewe_dct['nvars']): 
-            myvarY = cewe_dct['variables'][mynrY]
+    for mynrx in range(nvars):                
+        myvarx = cewe_dct['variables'][mynrx]
+        for mynry in range(nvars): 
+            myvary = cewe_dct['variables'][mynry]
         
-            mycircX  = cewe_dct['circular'][mynrX]
-            mycircY  = cewe_dct['circular'][mynrY]
+            mycircx  = cewe_dct['circular'][mynrx]
+            mycircy  = cewe_dct['circular'][mynry]
             
-            if mycircX:
-                mynrX_cos                           = np.argmax(lst_vars == (myvarX+'_cartesian_cos'))
-                mynrX_sin                           = np.argmax(lst_vars == (myvarX+'_cartesian_sin'))
-            if mycircY:
-                mynrY_cos                           = np.argmax(lst_vars == (myvarY+'_cartesian_cos'))
-                mynrY_sin                           = np.argmax(lst_vars == (myvarY+'_cartesian_sin'))
+            if mycircx:
+                mynrx_cos                           = np.argmax(lst_vars == (myvarx+'_cartesian_cos'))
+                mynrx_sin                           = np.argmax(lst_vars == (myvarx+'_cartesian_sin'))
+            if mycircy:
+                mynry_cos                           = np.argmax(lst_vars == (myvary+'_cartesian_cos'))
+                mynry_sin                           = np.argmax(lst_vars == (myvary+'_cartesian_sin'))
 
             #correlation coefficient
-            if (mycircX and mycircY):
-                cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY] = \
+            if (mycircx and mycircy):
+                cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry] = \
                     circular_circular_corrcoef(
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_cos, mynrY_cos],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_cos, mynrY_sin],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_sin, mynrY_cos],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_sin, mynrY_sin],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_cos, mynrX_sin],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrY_cos, mynrY_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_cos, mynry_cos],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_cos, mynry_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_sin, mynry_cos],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_sin, mynry_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_cos, mynrx_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynry_cos, mynry_sin],
                     )                
-            elif mycircX:
-                cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY] = \
+            elif mycircx:
+                cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry] = \
                     linear_circular_corrcoef(
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_cos, mynrY],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_sin, mynrY],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX_cos, mynrX_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_cos, mynry],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_sin, mynry],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx_cos, mynrx_sin],
                     )
-            elif mycircY:
-                cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY] = \
+            elif mycircy:
+                cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry] = \
                     linear_circular_corrcoef(
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY_cos],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrX, mynrY_sin],
-                        cewe_scatter_dct['correlationcoefficientXY'][mynrY_cos, mynrY_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry_cos],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynrx, mynry_sin],
+                        cewe_scatter_dct['correlationcoefficientxy'][mynry_cos, mynry_sin],
                     )
             
             #least squares fit parameters
-            if mycircX:
+            if mycircx:
                 #with respect to the article the following mapping is relevant
-                #X -> cos_X
-                #Y -> sin_X
-                #Z -> Y
-                cewe_scatter_dct['leastsquaresfit_P1'][mynrX, mynrY],\
-                cewe_scatter_dct['leastsquaresfit_P2'][mynrX, mynrY],\
-                cewe_scatter_dct['leastsquaresfit_P3'][mynrX, mynrY] = \
+                #x1 -> cos_x
+                #x2 -> sin_x
+                #y -> y
+                cewe_scatter_dct['leastsquaresfit_circ_beta0'][mynrx, mynry],\
+                cewe_scatter_dct['leastsquaresfit_circ_beta1'][mynrx, mynry],\
+                cewe_scatter_dct['leastsquaresfit_circ_beta2'][mynrx, mynry] = \
                     lsf_parameters2(
-                        cewe_scatter_dct['meanX'][mynrX_cos, mynrY],
-                        cewe_scatter_dct['meanX'][mynrX_sin, mynrY],
-                        cewe_scatter_dct['meanY'][mynrX, mynrY],
-                        cewe_scatter_dct['varianceX'][mynrX_cos, mynrY],
-                        cewe_scatter_dct['varianceX'][mynrX_sin, mynrY],
-                        cewe_scatter_dct['varianceY'][mynrX, mynrY],
-                        cewe_scatter_dct['covarianceXY'][mynrX_cos, mynrX_sin],
-                        cewe_scatter_dct['covarianceXY'][mynrX_cos, mynrY],
-                        cewe_scatter_dct['covarianceXY'][mynrX_sin, mynrY],
+                        cewe_scatter_dct['meanx'][mynrx_cos, mynry],
+                        cewe_scatter_dct['meanx'][mynrx_sin, mynry],
+                        cewe_scatter_dct['meany'][mynrx, mynry],
+                        cewe_scatter_dct['variancex'][mynrx_cos, mynry],
+                        cewe_scatter_dct['variancex'][mynrx_sin, mynry],
+                        cewe_scatter_dct['variancey'][mynrx, mynry],
+                        cewe_scatter_dct['covariancexy'][mynrx_cos, mynrx_sin],
+                        cewe_scatter_dct['covariancexy'][mynrx_cos, mynry],
+                        cewe_scatter_dct['covariancexy'][mynrx_sin, mynry],
                     )
+
+
+    cewe_dct['scatter'] = cewe_scatter_dct
+
+
 
 def add_cewe_dct(cewe_dct, cewe_dct_to_add, cewe_opts={}):
     #TBD: check given CEWE dictionaries 
-
+    #...
+    
     if len(cewe_dct.keys()) == 0:
         #empty cewe_dct -> copy
         cewe_dct.update(deepcopy(cewe_dct_to_add))
@@ -393,41 +487,28 @@ def add_cewe_dct(cewe_dct, cewe_dct_to_add, cewe_opts={}):
         pass
     else:
 
+        #add summary statistics, for linear statistics
         for mynr in range(cewe_dct['nvars']):
             n1  = cewe_dct['nsamples'][mynr]
             n2  = cewe_dct_to_add['nsamples'][mynr]
-            
-            if n2 <= 10:
-                continue
-            
-            #no results for this variable yet -> copy
-            if n1 <= 10:
-                cewe_dct['nsamples'][mynr]             = cewe_dct_to_add['nsamples'][mynr]
-                cewe_dct['mean'][mynr]                 = cewe_dct_to_add['mean'][mynr]
-                cewe_dct['variance'][mynr]             = cewe_dct_to_add['variance'][mynr] 
-                cewe_dct['histogram_count'][mynr]      = cewe_dct_to_add['histogram_count'][mynr] 
-                continue
-              
             mycirc  = cewe_dct['circular'][mynr]
-       
-            #statistics, pass for linear statistics
-            if not mycirc:
-                n12     = n1 + n2
-                mu1     = cewe_dct['mean'][mynr]
-                mu2     = cewe_dct_to_add['mean'][mynr]
-                mu12    = mean((mu1, mu2), (1. * n1/n12, 1. * n2/n12))
-                var1    = cewe_dct['variance'][mynr]
-                var2    = cewe_dct_to_add['variance'][mynr]        
-                var12   = (
-                            ((1. * n1) / n12) * var1 +
-                            ((1. * n1) / n12) * ((mu1 - mu12) ** 2.) +
-                            ((1. * n2) / n12) * var2 +
-                            ((1. * n2) / n12) * ((mu2 - mu12) ** 2.)
-                            )
 
-                cewe_dct['nsamples'][mynr]              = n12        
-                cewe_dct['mean'][mynr]                  = mu12
-                cewe_dct['variance'][mynr]              = var12
+            n12     = n1 + n2
+            if (n12 != 0):
+                if not mycirc:
+                    f1      = ((1. * n1) / n12)
+                    f2      = ((1. * n2) / n12)
+                    
+                    #raw moments
+                    for i in [1,2,3,4]:
+                        cewe_dct['raw_moment_mu_x'+str(i)][mynr] = \
+                            (
+                            (f1 * cewe_dct['raw_moment_mu_x'+str(i)][mynr])
+                            +
+                            (f2 * cewe_dct_to_add['raw_moment_mu_x'+str(i)][mynr])
+                            )
+                        
+            cewe_dct['nsamples'][mynr]              = n12        
             
             #histogram
             cewe_dct['histogram_count'][mynr]       = (
@@ -439,181 +520,71 @@ def add_cewe_dct(cewe_dct, cewe_dct_to_add, cewe_opts={}):
         cewe_scatter_dct         = cewe_dct['scatter']
         cewe_scatter_dct_to_add  = cewe_dct_to_add['scatter']
 
-        for mynrX in range(cewe_dct['nvars']):                
-            for mynrY in range(cewe_dct['nvars']):             
-                n1  = cewe_scatter_dct['nsamples'][mynrX, mynrY]
-                n2  = cewe_scatter_dct_to_add['nsamples'][mynrX, mynrY]
+        for mynrx in range(cewe_dct['nvars']):                
+            for mynry in range(cewe_dct['nvars']):             
+                n1  = cewe_scatter_dct['nsamples'][mynrx, mynry]
+                n2  = cewe_scatter_dct_to_add['nsamples'][mynrx, mynry]
+                mycircx = int(cewe_dct['circular'][mynrx])
+                mycircy = int(cewe_dct['circular'][mynry])
                 
-                mycircX = int(cewe_dct['circular'][mynrX])
-                mycircY = int(cewe_dct['circular'][mynrY])
-                
-                if n2 <= 10:
-                    #nothing to add
-                    continue
-                    
-                #no results for this variable yet
-                if n1 <= 10:
-                    cewe_scatter_dct['nsamples'][mynrX, mynrY]          = cewe_scatter_dct_to_add['nsamples'][mynrX, mynrY]
-                    cewe_scatter_dct['meanX'][mynrX, mynrY]             = cewe_scatter_dct_to_add['meanX'][mynrX, mynrY]
-                    cewe_scatter_dct['meanY'][mynrX, mynrY]             = cewe_scatter_dct_to_add['meanY'][mynrX, mynrY]
-                    cewe_scatter_dct['varianceX'][mynrX, mynrY]         = cewe_scatter_dct_to_add['varianceX'][mynrX, mynrY]
-                    cewe_scatter_dct['varianceY'][mynrX, mynrY]         = cewe_scatter_dct_to_add['varianceY'][mynrX, mynrY]
-                    cewe_scatter_dct['covarianceXY'][mynrX, mynrY]      = cewe_scatter_dct_to_add['covarianceXY'][mynrX, mynrY]
-                    cewe_scatter_dct['histogram2D_count'][mynrX, mynrY] = cewe_scatter_dct_to_add['histogram2D_count'][mynrX, mynrY]
-                    continue
-                    
-                n12             = n1 + n2
-                muX1            = cewe_scatter_dct['meanX'][mynrX, mynrY]
-                muX2            = cewe_scatter_dct_to_add['meanX'][mynrX, mynrY]
-                muY1            = cewe_scatter_dct['meanY'][mynrX, mynrY]
-                muY2            = cewe_scatter_dct_to_add['meanY'][mynrX, mynrY]
-                muX12           = mean((muX1, muX2), (1. * n1 / n12, 1. * n2 / n12))
-                muY12           = mean((muY1, muY2), (1. * n1 / n12, 1. * n2 / n12))
-                                
-                varX1           = cewe_scatter_dct['varianceX'][mynrX, mynrY]
-                varX2           = cewe_scatter_dct_to_add['varianceX'][mynrX, mynrY]
-                varX12          = (1. / n12) * (
-                                    (n1 * varX1)
-                                    + (n1 * ((muX1 - muX12) ** 2.))
-                                    + (n2 * varX2)
-                                    + (n2 * ((muX2 - muX12) ** 2.))
-                                    )
+                n12 = n1 + n2
+                if n12 != 0:
+                    f1  = (1. * n1) / n12           
+                    f2  = (1. * n2) / n12           
 
-                varY1           = cewe_scatter_dct['varianceY'][mynrX, mynrY]
-                varY2           = cewe_scatter_dct_to_add['varianceY'][mynrX, mynrY]
-                varY12          = (1. / n12) * (
-                                    (n1 * varY1)
-                                    + (n1 * ((muY1 - muY12) ** 2.))
-                                    + (n2 * varY2)
-                                    + (n2 * ((muY2 - muY12) ** 2.))
-                                    )
-                
-                #covariance
-                covXY1          = cewe_scatter_dct['covarianceXY'][mynrX, mynrY]
-                covXY2          = cewe_scatter_dct_to_add['covarianceXY'][mynrX, mynrY]
-                covXY12 = (
-                            ((1. * n1 / n12) * covXY1)
-                            + ((1. * n1 / n12) * (muX1 - muX12) * (muY1 - muY12)) 
-                            + ((1. * n2 / n12) * covXY2)
-                            + ((1. * n2 / n12) * (muX2 - muX12) * (muY2 - muY12))
-                          )
-                                    
-                cewe_scatter_dct['nsamples'][mynrX, mynrY]          = n12
-                cewe_scatter_dct['meanX'][mynrX, mynrY]             = muX12
-                cewe_scatter_dct['meanY'][mynrX, mynrY]             = muY12
-                cewe_scatter_dct['varianceX'][mynrX, mynrY]         = varX12
-                cewe_scatter_dct['varianceY'][mynrX, mynrY]         = varY12
-                cewe_scatter_dct['covarianceXY'][mynrX, mynrY]      = covXY12
+                    if not mycircx:
+                        for i in [1,2,3,4]:
+                            cewe_scatter_dct['raw_moment_mu_x'+str(i)][mynrx, mynry] = \
+                                (
+                                (f1 * cewe_scatter_dct['raw_moment_mu_x'+str(i)][mynrx, mynry])
+                                +
+                                (f2 * cewe_scatter_dct_to_add['raw_moment_mu_x'+str(i)][mynrx, mynry])
+                                )
+                                            
+                    if not mycircy:
+                        for i in [1,2,3,4]:
+                            cewe_scatter_dct['raw_moment_mu_y'+str(i)][mynrx, mynry] = \
+                                (
+                                (f1 * cewe_scatter_dct['raw_moment_mu_y'+str(i)][mynrx, mynry])
+                                +
+                                (f2 * cewe_scatter_dct_to_add['raw_moment_mu_y'+str(i)][mynrx, mynry])
+                                )
 
-                cewe_scatter_dct['histogram2D_count'][mynrX, mynrY]  = (
-                    cewe_scatter_dct['histogram2D_count'][mynrX, mynrY] +
-                    cewe_scatter_dct_to_add['histogram2D_count'][mynrX, mynrY]
+                    #calculate mixed moments
+                    if ((not mycircx) and (not mycircy)):
+                        cewe_scatter_dct['mixed_moment_nu'][mynrx, mynry] = \
+                            (
+                            (f1 * cewe_scatter_dct['mixed_moment_nu'][mynrx, mynry])
+                            +
+                            (f2 * cewe_scatter_dct_to_add['mixed_moment_nu'][mynrx, mynry])
+                            )                    
+                                                                            
+                cewe_scatter_dct['nsamples'][mynrx, mynry]          = n12
+                cewe_scatter_dct['histogram2D_count'][mynrx, mynry]  = (
+                    cewe_scatter_dct['histogram2D_count'][mynrx, mynry] +
+                    cewe_scatter_dct_to_add['histogram2D_count'][mynrx, mynry]
                     )
 
-        #post calculations
-        cewe_update_circular(cewe_dct)
-        cewe_calc_correlation_and_lsf(cewe_dct)
-
-#~ def alternative_covariance_calculation(cewe_dct, cewe_opts={}):
-    #~ #TBD: check given CEWE dictionaries 
-        
-    #~ cewe_scatter_dct = cewe_dct['scatter']
-
-    #~ for mynrA in range(cewe_dct['nvars']):                
-        #~ for mynrB in range(cewe_dct['nvars']):
-            #~ muA         = cewe_scatter_dct['meanA'][mynrA, mynrB]
-            #~ muB         = cewe_scatter_dct['meanB'][mynrA, mynrB]
-            #~ n           = cewe_scatter_dct['nsamples'][mynrA, mynrB]
-
-            #~ myangA = int(dct['angular'][mynrA])
-            #~ myangB = int(dct['angular'][mynrB])  
-
-            #~ cvalueA = cewe_dct['histogram_central_value'][mynrA]
-            #~ cvalueB = cewe_dct['histogram_central_value'][mynrB]
-
-            #~ #walk through the grid
-            #~ varA = 0.
-            #~ varB = 0.
-            #~ covAB = 0.
-            #~ for iA in range(cewe_dct['bins']):
-                #~ for iB in range(cewe_dct['bins']):
-                    #~ thisn = cewe_scatter_dct['histogram2D_count'][mynrA, mynrB, iB, iA]
-                    
-                    #~ varA    += thisn * (diff(cvalueA[iA], muA, myangA)**2.)
-                    #~ varB    += thisn * (diff(cvalueB[iB], muB, myangB)**2.)
-                    #~ covAB   += thisn * diff(cvalueA[iA], muA, myangA) * diff(cvalueB[iB], muB, myangB)
-            
-            #~ varA /= n
-            #~ varB /= n
-            #~ covAB /= n
-
-            #~ lsf_B = covAB / varA
-            #~ lsf_A = muB - lsf_B * muA
-                        
-            #~ #Improve the correction if one of the two variables is angular
-            #~ if angularA or angularB:
-                #~ varA = 0.
-                #~ varB = 0.
-                #~ covAB = 0.
-                #~ for iA in range(output_cewe_dct['bins']):
-                    #~ for iB in range(output_cewe_dct['bins']):
-                        #~ thisn = myscatterdct['histogram2d'][mynrA, mynrB, iB, iA]
-                        #~ myvalA = cvalueA[iA]
-                        #~ myvalB = cvalueB[iB]
-                        
-                        #~ #clip towards the fitted line
-                        #~ if angularA:
-                            #~ X = (myvalB - lsf_A) / lsf_B
-                            #~ myvalA = X + mydiff(myvalA, X)
-                        #~ if angularB:
-                            #~ Y = lsf_A + lsf_B * myvalA
-                            #~ myvalB = Y + mydiff(myvalB, Y)
-                                            
-                        #~ varA    += thisn * ((myvalA - muA) ** 2.)
-                        #~ varB    += thisn * ((myvalB - muB) ** 2.)
-                        #~ covAB   += thisn * (myvalA - muA) * (myvalB - muB)
-                
-                #~ varA    /= n
-                #~ varB    /= n
-                #~ covAB   /= n
-                
-            #~ cewe_scatter_dct['varianceA'][mynrA, mynrB]      = varA
-            #~ cewe_scatter_dct['varianceB'][mynrA, mynrB]      = varB
-            #~ cewe_scatter_dct['covarianceAB'][mynrA, mynrB]  = covAB
-
-    #~ #post calculations
-    #~ cewe_scatter_dct['leastsquaresfit_D']       = cewe_scatter_dct['covarianceAB'] / cewe_scatter_dct['varianceA']
-    #~ cewe_scatter_dct['leastsquaresfit_C']       = cewe_scatter_dct['meanB'] - (cewe_scatter_dct['leastsquaresfit_D'] * cewe_scatter_dct['meanA'])
-    #~ cewe_scatter_dct['correlationcoefficientAB'] = cewe_scatter_dct['covarianceAB'] / np.sqrt(cewe_scatter_dct['varianceA'] * cewe_scatter_dct['varianceB'])
+        #update
+        cewe_udpate(cewe_dct)
 
 
-#~ #Other more trivial functions
-#~ def diff(x, y, ang=False):
-    #~ if not ang:
-        #~ return x - y
-    #~ else:
-        #~ return ((180. + x - y) % 360.)   - 180.
-    
-def mean(x, weights=None):
+def raw_moment(x, k, weights=None):
     if weights == None:
         weights = np.ones(len(x))
     weights = np.array(weights) / np.sum(weights)
-    return np.sum(weights*x)
+    return np.sum(weights*(x**(1.*k)))
 
+def mixed_moment(x, y):
+    weights = np.ones(len(x))
+    weights = np.array(weights) / np.sum(weights)
+    return np.sum(weights * x * y)
+    
 def circ_mean(x_mean_cos, x_mean_sin):
     return np.arctan2(x_mean_sin, x_mean_cos)
-    
-def variance(x):
-    return np.average((x - mean(x))**2.)
 
 def circ_variance(x_mean_cos, x_mean_sin):
     return -2. * np.log(np.sqrt((x_mean_cos ** 2.) + (x_mean_sin ** 2.)))
-
-def covariance(x1, x2):
-    return np.average((x1 - mean(x1)) * (x2 - mean(x2)))
-
-def corrcoef(x1, x2):
-    return covariance(x1, x2) / np.sqrt(variance(x1) * variance(x2))
 
 def linear_circular_corrcoef(rxc, rxs, rcs):
     return np.sqrt(
@@ -635,16 +606,16 @@ def circular_circular_corrcoef(rCC, rCS, rSC, rSS, r1, r2):
         )
     return np.sqrt(x) if (x > 0) else np.sqrt(-x)
 
-def lsf_parameters(muX, muY, varX, varY, covXY):
-    p2 = covXY / varX
-    p1 = muY - (p2 * muX)
-    return p1, p2
+def lsf_parameters(mux, muy, varx, vary, covxy):
+    beta1 = covxy / varx
+    beta0 = muy - (beta1 * mux)
+    return beta0, beta1
                     
-def lsf_parameters2(muX, muY, muZ, varX, varY, varZ, covXY, covXZ, covYZ):
-    p2 = ((covXY * covYZ) - (covXZ * varY)) / ((covXY ** 2.) - (varX * varY))
-    p3 = ((covXY * covXZ) - (covYZ * varX)) / ((covXY ** 2.) - (varX * varY))
-    p1 = muZ - (p2 * muX) - (p3 * muY)
-    return p1, p2, p3
+def lsf_parameters2(mux, muy, muZ, varx, vary, varZ, covxy, covxZ, covyZ):
+    beta1 = ((covxy * covyZ) - (covxZ * vary)) / ((covxy ** 2.) - (varx * vary))
+    beta2 = ((covxy * covxZ) - (covyZ * varx)) / ((covxy ** 2.) - (varx * vary))
+    beta0 = muZ - (beta1 * mux) - (beta2 * muy)
+    return beta0, beta1, beta2
 
 def ok(x, cewe_opts={}):
     check = (False == (np.isinf(x) | np.isnan(x) | (x == cewe_opts['_FillValue'])))
