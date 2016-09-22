@@ -42,11 +42,11 @@ If you have any suggestions for improvements or amendments, please inform the au
 
 Typical usage
 =============
-- See the example.
+- See the manual and example.
 
 Testing
 =======
-- See the example.
+- Try the example.
 
 Revision History
 ================
@@ -56,6 +56,8 @@ March 3th, 2016
 July 15th, 2016
 - Code updated. Raw moments and a mixed moment are now used in the calculations to add skewness and kurtosis conveniently.
 
+September 22nd, 2016
+- Manual added.
 '''
 
 
