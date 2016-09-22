@@ -618,6 +618,10 @@ def lsf_parameters2(mux, muy, muZ, varx, vary, varZ, covxy, covxZ, covyZ):
     return beta0, beta1, beta2
 
 def ok(x, cewe_opts={}):
-    check = (False == (np.isinf(x) | np.isnan(x) | (x == cewe_opts['_FillValue'])))
+    check = (False == (
+		np.isinf(x) |
+		np.isnan(x) |
+		(np.abs(x - cewe_opts['_FillValue']) < 1.e-4)
+		))
     return check
     
